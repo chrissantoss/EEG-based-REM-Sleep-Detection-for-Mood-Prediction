@@ -36,29 +36,21 @@ RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATASETS = {
     "sleep-edf": {
         "description": "Sleep-EDF Database from PhysioNet - Contains EEG recordings with sleep stage annotations",
-        "url": "https://physionet.org/files/sleep-edfx/1.0.0/",
+        "url": "https://physionet.org/content/sleep-edfx/1.0.0/sleep-cassette/",
         "files": [
             "SC4001E0-PSG.edf", "SC4001EC-Hypnogram.edf",
             "SC4002E0-PSG.edf", "SC4002EC-Hypnogram.edf",
             "SC4011E0-PSG.edf", "SC4011EH-Hypnogram.edf",
-            "SC4012E0-PSG.edf", "SC4012EC-Hypnogram.edf",
-            "SC4021E0-PSG.edf", "SC4021EH-Hypnogram.edf",
-            "SC4022E0-PSG.edf", "SC4022EH-Hypnogram.edf",
-            "SC4031E0-PSG.edf", "SC4031EC-Hypnogram.edf",
-            "SC4032E0-PSG.edf", "SC4032EC-Hypnogram.edf",
-            "SC4041E0-PSG.edf", "SC4041EC-Hypnogram.edf",
-            "SC4042E0-PSG.edf", "SC4042EC-Hypnogram.edf",
+            "SC4012E0-PSG.edf", "SC4012EC-Hypnogram.edf"
         ],
         "method": "physionet"
     },
     "sleep-cassette": {
         "description": "Sleep Cassette Study from PhysioNet - Contains EEG recordings with sleep stage annotations",
-        "url": "https://physionet.org/files/sleep-edfx/1.0.0/",
+        "url": "https://physionet.org/content/sleep-edfx/1.0.0/sleep-telemetry/",
         "files": [
-            "SC4111E0-PSG.edf", "SC4111EC-Hypnogram.edf",
-            "SC4112E0-PSG.edf", "SC4112EC-Hypnogram.edf",
-            "SC4121E0-PSG.edf", "SC4121EC-Hypnogram.edf",
-            "SC4122E0-PSG.edf", "SC4122EC-Hypnogram.edf",
+            "ST7011J0-PSG.edf", "ST7011JP-Hypnogram.edf",
+            "ST7022J0-PSG.edf", "ST7022JM-Hypnogram.edf"
         ],
         "method": "physionet"
     },
