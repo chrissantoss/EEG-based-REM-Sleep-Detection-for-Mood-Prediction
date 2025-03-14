@@ -52,6 +52,10 @@ eeg-rem-sleep-detection/
 │   ├── raw/                   # Raw EEG datasets
 │   ├── processed/             # Processed datasets
 │   └── features/              # Extracted features
+├── models/                    # Trained models
+│   ├── rem_detection/         # REM detection models
+│   ├── mood_prediction/       # Mood prediction models
+│   └── tuning_results/        # Hyperparameter tuning results
 ├── notebooks/                 # Jupyter notebooks for exploration and visualization
 ├── src/                       # Source code
 │   ├── data/                  # Data processing scripts
@@ -60,28 +64,43 @@ eeg-rem-sleep-detection/
 │   ├── visualization/         # Visualization tools
 │   └── utils/                 # Utility functions
 ├── tests/                     # Unit tests
+├── visualizations/            # Generated visualizations
+│   └── tuning_results/        # Hyperparameter tuning visualizations
 ├── requirements.txt           # Project dependencies
 └── README.md                  # Project documentation
 ```
 
 ## Usage
 
+### Running the Pipeline
+
+The project provides a unified command-line interface for running different components:
+
+```bash
+python run_pipeline.py [command] [options]
+```
+
+Available commands:
+- `pipeline`: Run the standard data processing and model training pipeline
+- `tune`: Run hyperparameter tuning for models
+- `visualize`: Visualize hyperparameter tuning results
+
 ### Data Processing
 
 ```bash
-python src/data/process_data.py
+python run_pipeline.py pipeline --steps process
 ```
 
 ### Feature Extraction
 
 ```bash
-python src/features/extract_features.py
+python run_pipeline.py pipeline --steps extract
 ```
 
 ### Model Training
 
 ```bash
-python src/models/train_model.py --model [model_name]
+python run_pipeline.py pipeline --steps train --model [model_name]
 ```
 Available models: logistic_regression, svm, random_forest, xgboost
 
@@ -94,8 +113,54 @@ python src/models/predict_mood.py --input [eeg_data_file]
 ### Visualization
 
 ```bash
-python src/visualization/visualize_sleep_patterns.py
+python run_pipeline.py pipeline --steps visualize
 ```
+
+## Hyperparameter Tuning
+
+The project includes a comprehensive hyperparameter tuning system that helps optimize model performance and tracks results.
+
+### Running Hyperparameter Tuning
+
+```bash
+python run_pipeline.py tune [options]
+```
+
+Options:
+- `--task`: Task to tune models for (`rem_detection`, `mood_prediction`, or `all`)
+- `--model`: Model to tune (`logistic_regression`, `svm`, `random_forest`, `xgboost`, or `all`)
+- `--n_iter`: Number of parameter settings to sample (default: 50)
+- `--cv`: Number of cross-validation folds (default: 5)
+- `--scoring`: Scoring metric for hyperparameter tuning (`accuracy`, `precision`, `recall`, `f1`, or `roc_auc`)
+
+Examples:
+
+```bash
+# Tune all models for all tasks with default settings
+python run_pipeline.py tune
+
+# Tune only the random forest model for REM detection with 100 iterations
+python run_pipeline.py tune --task rem_detection --model random_forest --n_iter 100
+```
+
+### Visualizing Tuning Results
+
+```bash
+python run_pipeline.py visualize [options]
+```
+
+Options:
+- `--task`: Filter by task name
+- `--model`: Filter by model name
+- `--output-dir`: Directory to save visualizations
+
+The visualization script generates:
+1. Metric comparison charts (before vs. after tuning)
+2. Improvement heatmaps
+3. Parameter importance visualizations
+4. Comprehensive HTML reports
+
+For more details, see the [Hyperparameter Tuning README](models/tuning_results/README.md).
 
 ## Testing
 
@@ -111,4 +176,4 @@ Group 25: Siraj Khanna, Seung-woo Kim, David McGuire, Luca Perrone, Chris Santos
 
 ## License
 
-MIT # EEG-based-REM-Sleep-Detection-for-Mood-Prediction
+MIT
