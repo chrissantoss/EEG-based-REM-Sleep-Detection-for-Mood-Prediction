@@ -113,106 +113,6 @@ class EnhancedMoodPredictor:
         except Exception as e:
             logger.error(f"Error loading base model: {e}")
             return None, None
-    
-    def generate_synthetic_data(self, n_samples=1000):
-        """
-        Generate synthetic data with sleep metrics and additional factors.
-        
-        Args:
-            n_samples (int): Number of samples to generate
-            
-        Returns:
-            tuple: (X, y) - features and labels
-        """
-        logger.info(f"Generating {n_samples} synthetic data samples")
-        
-        # Create pandas DataFrame for features
-        X = pd.DataFrame()
-        
-        # Generate sleep metrics
-        X['total_sleep_time'] = np.random.normal(420, 60, n_samples)  # Mean 7 hours
-        X['wake_time'] = np.random.normal(30, 20, n_samples)
-        X['rem_time'] = np.random.normal(90, 30, n_samples)
-        X['light_sleep_time'] = X['total_sleep_time'] * 0.55 + np.random.normal(0, 20, n_samples)
-        X['deep_sleep_time'] = X['total_sleep_time'] - X['light_sleep_time'] - X['rem_time'] - X['wake_time']
-        X['sleep_efficiency'] = 100 * (X['total_sleep_time'] - X['wake_time']) / X['total_sleep_time']
-        X['rem_percentage'] = 100 * X['rem_time'] / X['total_sleep_time']
-        X['rem_cycles'] = np.random.randint(2, 6, n_samples)
-        X['rem_awakenings'] = np.random.randint(0, 8, n_samples)
-        
-        # Ensure all sleep metrics are reasonable
-        X['deep_sleep_time'] = X['deep_sleep_time'].apply(lambda x: max(0, x))
-        X['sleep_efficiency'] = X['sleep_efficiency'].clip(50, 100)
-        X['rem_percentage'] = X['rem_percentage'].clip(5, 35)
-        
-        # Generate additional factors
-        X['stress_level'] = np.random.randint(1, 11, n_samples)
-        X['exercise_minutes'] = np.random.exponential(30, n_samples)
-        X['caffeine_mg'] = np.random.choice([0, 80, 160, 240, 320], n_samples)
-        X['screen_time_minutes'] = np.random.exponential(60, n_samples)
-        X['alcohol_units'] = np.random.choice([0, 1, 2, 3, 4, 5], n_samples, p=[0.3, 0.3, 0.2, 0.1, 0.05, 0.05])
-        X['outdoor_time_minutes'] = np.random.exponential(45, n_samples)
-        X['social_interaction_score'] = np.random.randint(1, 11, n_samples)
-        X['meditation_minutes'] = np.random.exponential(10, n_samples)
-        
-        # Create target variable (mood) based on a complex relationship with features
-        # Good sleep + low stress + exercise + low alcohol/caffeine = better mood
-        
-        # Normalize the key factors to 0-1 range
-        sleep_quality = (X['sleep_efficiency'] - 50) / 50  # 50-100 → 0-1
-        rem_quality = (X['rem_percentage'] - 5) / 30  # 5-35 → 0-1
-        stress_factor = (10 - X['stress_level']) / 10  # 10-1 → 0-1
-        exercise_factor = np.minimum(X['exercise_minutes'] / 60, 1)  # 0-60+ → 0-1
-        caffeine_factor = 1 - (X['caffeine_mg'] / 320)  # 0-320 → 1-0
-        alcohol_factor = 1 - (X['alcohol_units'] / 5)  # 0-5 → 1-0
-        outdoor_factor = np.minimum(X['outdoor_time_minutes'] / 90, 1)  # 0-90+ → 0-1
-        social_factor = (X['social_interaction_score'] - 1) / 9  # 1-10 → 0-1
-        meditation_factor = np.minimum(X['meditation_minutes'] / 20, 1)  # 0-20+ → 0-1
-        
-        # Combine factors with weights
-        mood_score = (
-            0.25 * sleep_quality + 
-            0.15 * rem_quality + 
-            0.15 * stress_factor + 
-            0.10 * exercise_factor + 
-            0.05 * caffeine_factor + 
-            0.10 * alcohol_factor +
-            0.10 * outdoor_factor +
-            0.05 * social_factor +
-            0.05 * meditation_factor
-        )
-        
-        # Add some random noise
-        mood_score = mood_score + np.random.normal(0, 0.1, n_samples)
-        
-        # Clip to 0-1 range
-        mood_score = np.clip(mood_score, 0, 1)
-        
-        # Convert to binary (good mood = score >= 0.6)
-        y = (mood_score >= 0.6).astype(int)
-        
-        # Also store the continuous mood score for analysis
-        X['mood_score'] = mood_score * 10  # Scale to 0-10
-        
-        return X, y
-    
-    def train_enhanced_model(self, X, y):
-        """
-        Train an enhanced model that incorporates additional factors.
-        
-        Args:
-            X (pd.DataFrame): Feature data
-            y (pd.Series): Labels
-            
-        Returns:
-            tuple: (model, metadata)
-        """
-        logger.info("Training enhanced model")
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
         
         # Store continuous mood score for analysis if available
         mood_score_train = None
@@ -594,7 +494,7 @@ class EnhancedMoodPredictor:
         
         # Define paths to real data
         processed_data_path = DATA_DIR / "processed" / "sleep_efficiency_research_based.csv"
-        raw_data_path = DATA_DIR / "raw" / "sleep-mood" / "sleep_mood_dataset.csv"
+        # Use only the processed dataset
         
         try:
             # Try to load processed data first
@@ -624,21 +524,9 @@ class EnhancedMoodPredictor:
                 X = df[sleep_features + additional_features]
                 y = df['good_mood']
                 
-            # For the sleep_mood_dataset.csv format
-            elif 'mood_rating' in df.columns:
-                # Create binary target: good mood if rating >= 7
-                df['good_mood'] = (df['mood_rating'] >= 7.0).astype(int)
-                
-                # Define features
-                sleep_features = ['total_sleep_time', 'wake_time', 'rem_time', 
-                                'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
-                                'rem_percentage', 'rem_cycles', 'rem_awakenings']
-                
-                X = df[sleep_features]
-                y = df['good_mood']
-            
+            # Handle unsupported data formats
             else:
-                logger.error("Unsupported data format. Missing expected columns.")
+                logger.error("Unsupported data format. Missing expected sleep efficiency columns.")
                 return None, None
             
             # Handle missing values if any

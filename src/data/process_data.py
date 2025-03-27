@@ -406,44 +406,13 @@ def process_sleep_edf_dataset(dataset_dir, output_dir):
     logger.info(f"Processed {len(processed_files)} files from Sleep-EDF dataset")
     return processed_files
 
-def process_sleep_mood_dataset(dataset_dir, output_dir):
-    """
-    Process the synthetic sleep-mood dataset.
-    
-    Args:
-        dataset_dir (Path): Directory containing the sleep-mood dataset
-        output_dir (Path): Directory to save processed data
-    
-    Returns:
-        Path: Path to the processed data file
-    """
-    # Ensure output directory exists
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Find the dataset file
-    dataset_file = dataset_dir / "sleep_mood_dataset.csv"
-    
-    if not dataset_file.exists():
-        logger.error(f"Dataset file not found: {dataset_file}")
-        return None
-    
-    # Read the dataset
-    df = pd.read_csv(dataset_file)
-    
-    # Save as processed data
-    output_file = output_dir / "sleep_mood_processed.csv"
-    df.to_csv(output_file, index=False)
-    
-    logger.info(f"Processed sleep-mood dataset and saved to {output_file}")
-    return output_file
-
 def main():
     """Main function to process datasets."""
     parser = argparse.ArgumentParser(description="Process EEG sleep datasets")
     parser.add_argument(
         "--datasets", 
         nargs="+", 
-        default=["sleep-edf", "sleep-cassette", "sleep-mood"],
+        default=["sleep-edf", "sleep-cassette"],
         help="Names of datasets to process (default: all)"
     )
     args = parser.parse_args()
@@ -462,8 +431,6 @@ def main():
         
         if dataset_name in ["sleep-edf", "sleep-cassette"]:
             process_sleep_edf_dataset(dataset_dir, output_dir)
-        elif dataset_name == "sleep-mood":
-            process_sleep_mood_dataset(dataset_dir, output_dir)
         else:
             logger.warning(f"Unknown dataset: {dataset_name}")
     

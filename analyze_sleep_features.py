@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This script analyzes feature importance in sleep-mood prediction models
+This script analyzes feature importance in sleep efficiency and mood prediction models
 and provides recommendations for model refinement.
 """
 

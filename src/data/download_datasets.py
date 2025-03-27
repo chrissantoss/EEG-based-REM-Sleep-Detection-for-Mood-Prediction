@@ -54,12 +54,6 @@ DATASETS = {
         ],
         "method": "physionet"
     },
-    "sleep-mood": {
-        "description": "Simulated dataset with sleep stages and mood ratings",
-        "url": None,
-        "files": ["sleep_mood_dataset.csv"],
-        "method": "generate"
-    }
 }
 
 def download_physionet_file(url, filename, target_dir):
@@ -110,109 +104,6 @@ def download_physionet_file(url, filename, target_dir):
             target_path.unlink()  # Remove partially downloaded file
         return None
 
-def generate_synthetic_dataset(target_dir):
-    """
-    Generate a synthetic dataset with sleep stages and mood ratings.
-    This is used for testing when real datasets are not available.
-    
-    Args:
-        target_dir (Path): Directory to save the generated dataset
-    
-    Returns:
-        Path: Path to the generated dataset file
-    """
-    import numpy as np
-    import pandas as pd
-    from datetime import datetime, timedelta
-    
-    logger.info("Generating synthetic sleep-mood dataset")
-    
-    # File path
-    file_path = target_dir / "sleep_mood_dataset.csv"
-    
-    # Skip if file already exists
-    if file_path.exists():
-        logger.info("Synthetic dataset already exists. Skipping generation.")
-        return file_path
-    
-    # Generate synthetic data
-    np.random.seed(42)  # For reproducibility
-    
-    # Number of subjects and nights
-    n_subjects = 20
-    n_nights = 5
-    
-    # Lists to store data
-    data = []
-    
-    for subject_id in range(1, n_subjects + 1):
-        for night in range(1, n_nights + 1):
-            # Generate sleep architecture
-            total_sleep_time = np.random.normal(480, 60)  # in minutes
-            
-            # Sleep stages in minutes
-            wake_time = max(0, np.random.normal(30, 15))
-            rem_time = max(0, np.random.normal(90, 20))
-            light_sleep_time = max(0, np.random.normal(240, 40))
-            deep_sleep_time = max(0, total_sleep_time - wake_time - rem_time - light_sleep_time)
-            
-            # Normalize to ensure total adds up to total_sleep_time
-            total = wake_time + rem_time + light_sleep_time + deep_sleep_time
-            wake_time = wake_time / total * total_sleep_time
-            rem_time = rem_time / total * total_sleep_time
-            light_sleep_time = light_sleep_time / total * total_sleep_time
-            deep_sleep_time = deep_sleep_time / total * total_sleep_time
-            
-            # Sleep quality metrics
-            sleep_efficiency = (total_sleep_time - wake_time) / total_sleep_time * 100
-            rem_percentage = rem_time / total_sleep_time * 100
-            
-            # Number of REM cycles (typically 4-5 per night)
-            rem_cycles = max(1, int(np.random.normal(4.5, 1)))
-            
-            # REM fragmentation (number of awakenings during REM)
-            rem_awakenings = max(0, int(np.random.normal(2, 1.5)))
-            
-            # Mood ratings (1-10 scale)
-            # Mood is influenced by REM sleep quality
-            base_mood = np.random.normal(7, 1.5)
-            rem_quality_factor = (rem_percentage / 20) * (1 - rem_awakenings / 5)
-            mood_rating = max(1, min(10, base_mood + rem_quality_factor))
-            
-            # Anxiety rating (1-10 scale)
-            # Anxiety is negatively correlated with deep sleep
-            base_anxiety = np.random.normal(4, 1.5)
-            deep_sleep_factor = deep_sleep_time / 120
-            anxiety_rating = max(1, min(10, base_anxiety - deep_sleep_factor))
-            
-            # Date
-            date = datetime(2023, 1, 1) + timedelta(days=(subject_id-1)*n_nights + night-1)
-            
-            # Add row to data
-            data.append({
-                'subject_id': f'S{subject_id:03d}',
-                'night': night,
-                'date': date.strftime('%Y-%m-%d'),
-                'total_sleep_time': round(total_sleep_time, 1),
-                'wake_time': round(wake_time, 1),
-                'rem_time': round(rem_time, 1),
-                'light_sleep_time': round(light_sleep_time, 1),
-                'deep_sleep_time': round(deep_sleep_time, 1),
-                'sleep_efficiency': round(sleep_efficiency, 1),
-                'rem_percentage': round(rem_percentage, 1),
-                'rem_cycles': rem_cycles,
-                'rem_awakenings': rem_awakenings,
-                'mood_rating': round(mood_rating, 1),
-                'anxiety_rating': round(anxiety_rating, 1),
-            })
-    
-    # Create DataFrame and save to CSV
-    df = pd.DataFrame(data)
-    df.to_csv(file_path, index=False)
-    
-    logger.info(f"Synthetic dataset generated and saved to {file_path}")
-    return file_path
-
 def download_dataset(dataset_name, target_dir=None):
     """
     Download a specific dataset.
@@ -241,7 +132,7 @@ def download_dataset(dataset_name, target_dir=None):
         for filename in dataset["files"]:
             download_physionet_file(dataset["url"], filename, target_dir)
     elif dataset["method"] == "generate":
-        generate_synthetic_dataset(target_dir)
+        logger.warning("Synthetic data generation has been removed. Please use real datasets.")
     else:
         logger.error(f"Unknown download method: {dataset['method']}")
         return False

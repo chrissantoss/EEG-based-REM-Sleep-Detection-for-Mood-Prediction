@@ -16,7 +16,7 @@ The code is organized into subdirectories:
 
 ### Data Processing
 
-- `data/download_datasets.py`: Downloads datasets from PhysioNet and generates synthetic data
+- `data/download_datasets.py`: Downloads datasets from PhysioNet for real data analysis
 - `data/process_data.py`: Processes raw EEG data, including filtering, segmentation, and feature extraction
 
 ### Feature Extraction
@@ -55,7 +55,7 @@ python src/utils/run_pipeline.py --steps download,process,extract,train,visualiz
 To run with specific datasets, tasks, or models:
 
 ```bash
-python src/utils/run_pipeline.py --datasets sleep-edf,sleep-mood --task rem_detection --model random_forest
+python src/utils/run_pipeline.py --datasets sleep-edf,sleep-cassette --task rem_detection --model random_forest
 ```
 
 ## Adding New Code

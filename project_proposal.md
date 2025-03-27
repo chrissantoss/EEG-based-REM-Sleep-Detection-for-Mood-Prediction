@@ -22,7 +22,7 @@ Several risks have been identified for this project:
 We plan to use publicly available EEG datasets from platforms like PhysioNet, including:
 1. **Sleep-EDF Database**: Contains EEG recordings with sleep stage annotations
 2. **Sleep-Cassette Study**: Additional EEG recordings with sleep stage annotations
-3. **Sleep-Mood Dataset**: A synthetic dataset with sleep stages and mood ratings
+3. **Sleep Efficiency Research Dataset**: A real dataset with sleep efficiency metrics and mood indicators
 
 Raw EEG data requires preprocessing before use in machine learning models. Our pipeline includes:
 - Filtering to remove unwanted frequencies

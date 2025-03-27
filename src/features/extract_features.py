@@ -183,26 +183,34 @@ def prepare_mood_prediction_features(data):
     Prepare features for mood prediction.
     
     Args:
-        data (pd.DataFrame): Sleep-mood dataset
+        data (pd.DataFrame): Sleep efficiency research dataset
     
     Returns:
         dict: Dictionary containing train/test splits for mood prediction
     """
-    # Check if mood rating column exists
-    if 'mood_rating' not in data.columns:
-        logger.error("Mood rating column not found in data")
-        return None
-    
-    # Create binary target: Good mood (>6) vs. Bad mood (<=6)
-    data['good_mood'] = (data['mood_rating'] > 6).astype(int)
+    # Check if good_mood column exists
+    if 'good_mood' not in data.columns:
+        # Check if we can create it from another column
+        if 'mood_rating' in data.columns:
+            # Create binary target: Good mood (>6) vs. Bad mood (<=6)
+            data['good_mood'] = (data['mood_rating'] > 6).astype(int)
+            logger.info("Created good_mood column from mood_rating")
+        else:
+            logger.error("Good mood or mood rating column not found in data")
+            return None
     
     # Select features (exclude non-feature columns)
     non_feature_cols = ['subject_id', 'night', 'date', 'dataset', 'file',
                         'mood_rating', 'anxiety_rating', 'good_mood']
-    feature_cols = [col for col in data.columns if col not in non_feature_cols]
+    
+    # Ensure we only include columns that exist in the dataset
+    existing_non_feature_cols = [col for col in non_feature_cols if col in data.columns]
+    feature_cols = [col for col in data.columns if col not in existing_non_feature_cols]
+    
+    logger.info(f"Selected {len(feature_cols)} feature columns: {feature_cols[:5]}...")
     
     # Handle missing values
-    data[feature_cols] = data[feature_cols].fillna(0)
+    data[feature_cols] = data[feature_cols].fillna(data[feature_cols].mean())
     
     # Split data
     X = data[feature_cols]
@@ -212,8 +220,13 @@ def prepare_mood_prediction_features(data):
     scaler = StandardScaler()
     X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
     
-    # Select most informative features
-    X_selected, selected_features = select_features(X_scaled, y, method='mutual_info', k=10)
+    # Select most informative features - use fewer features if dataset is small
+    k = min(10, len(feature_cols)-1)
+    if k < 1:
+        logger.error(f"Not enough features available: {len(feature_cols)}")
+        return None
+        
+    X_selected, selected_features = select_features(X_scaled, y, method='mutual_info', k=k)
     
     # Split into train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
@@ -300,29 +313,37 @@ def extract_rem_detection_features():
 
 def extract_mood_prediction_features():
     """
-    Extract features for mood prediction.
+    Extract features for mood prediction using research-based sleep efficiency data.
     
     Returns:
         Path: Path to the saved features file
     """
-    # Load processed data from sleep-mood dataset
-    df = load_processed_data("sleep-mood")
+    # Load processed data from the sleep efficiency research dataset
+    sleep_efficiency_file = PROCESSED_DIR / "sleep_efficiency_research_based.csv"
     
-    if df is None:
-        logger.error("No data loaded for mood prediction")
+    if not sleep_efficiency_file.exists():
+        logger.error(f"Sleep efficiency research data not found at {sleep_efficiency_file}")
         return None
     
-    # Prepare features
-    features_dict = prepare_mood_prediction_features(df)
-    
-    if features_dict is None:
+    try:
+        df = pd.read_csv(sleep_efficiency_file)
+        logger.info(f"Loaded sleep efficiency research data with {len(df)} records")
+        
+        # Prepare features
+        features_dict = prepare_mood_prediction_features(df)
+        
+        if features_dict is None:
+            return None
+        
+        # Save features
+        output_file = FEATURES_DIR / "mood_prediction_features.joblib"
+        save_features(features_dict, output_file)
+        
+        return output_file
+        
+    except Exception as e:
+        logger.error(f"Error processing sleep efficiency data: {e}")
         return None
-    
-    # Save features
-    output_file = FEATURES_DIR / "mood_prediction_features.joblib"
-    save_features(features_dict, output_file)
-    
-    return output_file
 
 def main():
     """Main function to extract features."""

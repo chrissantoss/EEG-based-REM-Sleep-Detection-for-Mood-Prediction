@@ -57,23 +57,18 @@ def load_real_mood_data():
     Returns:
         dict: Dictionary containing features similar to load_features() output
     """
-    print("IMPORTANT: Using real sleep-mood data instead of synthetic data")
+    print("IMPORTANT: Using real sleep efficiency data for mood prediction")
     
-    # Define paths to real data
+    # Define path to real data
     processed_data_path = DATA_DIR / "processed" / "sleep_efficiency_research_based.csv"
-    raw_data_path = DATA_DIR / "raw" / "sleep-mood" / "sleep_mood_dataset.csv"
     
     try:
-        # Try to load processed data first
+        # Load the data
         if processed_data_path.exists():
             df = pd.read_csv(processed_data_path)
             print(f"Loaded processed data with {len(df)} records from {processed_data_path}")
-        # Fall back to raw data if necessary
-        elif raw_data_path.exists():
-            df = pd.read_csv(raw_data_path)
-            print(f"Loaded raw data with {len(df)} records from {raw_data_path}")
         else:
-            print("No real data found. Please ensure data files exist.")
+            print("No real data found. Please ensure sleep_efficiency_research_based.csv exists.")
             return None
         
         # For the sleep_efficiency_research_based.csv dataset
@@ -85,20 +80,6 @@ def load_real_mood_data():
             
             X = df[sleep_features]
             y = df['good_mood']
-            
-        # For the sleep_mood_dataset.csv format
-        elif 'mood_rating' in df.columns:
-            # Create binary target: good mood if rating >= 7
-            df['good_mood'] = (df['mood_rating'] >= 7.0).astype(int)
-            
-            # Define features
-            sleep_features = ['total_sleep_time', 'wake_time', 'rem_time', 
-                            'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
-                            'rem_percentage', 'rem_cycles', 'rem_awakenings']
-            
-            X = df[sleep_features]
-            y = df['good_mood']
-        
         else:
             print("Unsupported data format. Missing expected columns.")
             return None

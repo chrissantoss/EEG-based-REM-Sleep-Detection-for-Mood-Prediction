@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 # Import project modules
-from data.download_datasets import download_dataset, generate_synthetic_dataset
+from data.download_datasets import download_dataset
 from data.process_data import filter_eeg_data, segment_eeg_data, extract_features, normalize_features
 from features.extract_features import select_features, prepare_rem_detection_features, prepare_mood_prediction_features
 from models.train_model import train_model, evaluate_model
@@ -35,36 +35,11 @@ class TestDataDownload(unittest.TestCase):
         """Clean up the test environment."""
         shutil.rmtree(self.temp_dir)
     
-    def test_generate_synthetic_dataset(self):
-        """Test the synthetic dataset generation."""
-        # Generate a synthetic dataset
-        dataset_file = generate_synthetic_dataset(self.temp_dir)
-        
-        # Check if the file was created
-        self.assertTrue(dataset_file.exists())
-        
-        # Check if the file is a valid CSV
-        df = pd.read_csv(dataset_file)
-        
-        # Check if the DataFrame has the expected columns
-        expected_columns = [
-            'subject_id', 'night', 'date', 'total_sleep_time', 'wake_time',
-            'rem_time', 'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency',
-            'rem_percentage', 'rem_cycles', 'rem_awakenings', 'mood_rating', 'anxiety_rating'
-        ]
-        
-        for col in expected_columns:
-            self.assertIn(col, df.columns)
-        
-        # Check if the DataFrame has the expected number of rows
-        self.assertEqual(len(df), 20 * 5)  # 20 subjects, 5 nights each
-
-class TestDataProcessing(unittest.TestCase):
     """Test the data processing functionality."""
     
     def setUp(self):
         """Set up the test environment."""
-        # Create a simple synthetic EEG data
+        # Create a mock EEG data for testing
         self.sfreq = 100  # 100 Hz
         self.duration = 10  # 10 seconds
         self.n_channels = 2
@@ -160,7 +135,7 @@ class TestFeatureExtraction(unittest.TestCase):
     
     def setUp(self):
         """Set up the test environment."""
-        # Create a simple synthetic dataset
+        # Create a mock dataset for testing
         np.random.seed(42)
         n_samples = 100
         
@@ -187,7 +162,7 @@ class TestFeatureExtraction(unittest.TestCase):
     
     def test_prepare_rem_detection_features(self):
         """Test the REM detection feature preparation."""
-        # Create a synthetic dataset
+        # Create a mock dataset for testing
         data = self.X.copy()
         data['sleep_stage'] = np.random.randint(0, 5, len(data))
         
@@ -208,7 +183,7 @@ class TestModelTraining(unittest.TestCase):
     
     def setUp(self):
         """Set up the test environment."""
-        # Create a simple synthetic dataset
+        # Create a mock dataset for testing
         np.random.seed(42)
         n_samples = 100
         

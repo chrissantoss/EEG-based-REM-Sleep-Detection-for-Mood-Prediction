@@ -176,7 +176,7 @@ class PersonalizedMoodPredictor:
             # Save to file
             self.personal_data.to_csv(self.sleep_data_path, index=False)
             
-            logger.info(f"Added new sleep-mood record for {record['date']}")
+            logger.info(f"Added new sleep efficiency and mood record for {record['date']}")
             
             # Update calibration model if we have enough data
             if len(self.personal_data) >= 5:
@@ -185,7 +185,7 @@ class PersonalizedMoodPredictor:
             return True
         
         except Exception as e:
-            logger.error(f"Error adding sleep-mood record: {e}")
+            logger.error(f"Error adding sleep efficiency and mood record: {e}")
             return False
     
     def update_calibration_model(self):

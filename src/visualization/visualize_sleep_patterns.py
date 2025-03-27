@@ -501,7 +501,7 @@ def plot_sleep_mood_relationship(data, output_file=None):
     # Save or show the plot
     if output_file:
         plt.savefig(output_file)
-        logger.info(f"Saved sleep-mood relationship plot to {output_file}")
+        logger.info(f"Saved sleep efficiency and mood relationship plot to {output_file}")
     else:
         plt.show()
     
@@ -633,21 +633,47 @@ def visualize_mood_prediction(model_name="xgboost"):
     output_dir = VISUALIZATION_DIR / "mood_prediction"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load sleep-mood data
-    sleep_mood_data = load_data("sleep-mood")
+    # Load sleep efficiency research data
+    sleep_efficiency_file = PROCESSED_DIR / "sleep_efficiency_research_based.csv"
     
-    if sleep_mood_data is not None:
-        # Plot sleep-mood relationship
-        plot_sleep_mood_relationship(
-            sleep_mood_data,
-            output_file=output_dir / "sleep_mood_relationship.png"
-        )
-        
-        # Create interactive visualization
-        create_interactive_sleep_visualization(
-            sleep_mood_data,
-            output_file=output_dir / "interactive_sleep_visualization.html"
-        )
+    if sleep_efficiency_file.exists():
+        try:
+            sleep_efficiency_data = pd.read_csv(sleep_efficiency_file)
+            logger.info(f"Loaded sleep efficiency data with {len(sleep_efficiency_data)} records")
+            
+            # Plot sleep efficiency and mood relationship if the needed columns exist
+            if all(col in sleep_efficiency_data.columns for col in ['rem_percentage', 'rem_time', 'mood_rating']):
+                plot_sleep_mood_relationship(
+                    sleep_efficiency_data,
+                    output_file=output_dir / "sleep_efficiency_mood_relationship.png"
+                )
+            elif all(col in sleep_efficiency_data.columns for col in ['rem_percentage', 'rem_time']) and 'good_mood' in sleep_efficiency_data.columns:
+                # If we only have binary mood data, add a derived mood_rating for visualization
+                sleep_efficiency_data['mood_rating'] = sleep_efficiency_data['good_mood'] * 9 + 1  # Map 0->1, 1->10
+                plot_sleep_mood_relationship(
+                    sleep_efficiency_data,
+                    output_file=output_dir / "sleep_efficiency_mood_relationship.png"
+                )
+                
+            # Create interactive visualization if the needed columns exist
+            if all(col in sleep_efficiency_data.columns for col in ['subject_id', 'night', 'rem_percentage', 'mood_rating']):
+                create_interactive_sleep_visualization(
+                    sleep_efficiency_data,
+                    output_file=output_dir / "interactive_sleep_visualization.html"
+                )
+            elif 'rem_percentage' in sleep_efficiency_data.columns and 'good_mood' in sleep_efficiency_data.columns:
+                # Create a basic version with available columns
+                sleep_efficiency_data['subject_id'] = sleep_efficiency_data.index.astype(str)
+                sleep_efficiency_data['night'] = 1
+                sleep_efficiency_data['mood_rating'] = sleep_efficiency_data['good_mood'] * 9 + 1  # Map 0->1, 1->10
+                create_interactive_sleep_visualization(
+                    sleep_efficiency_data,
+                    output_file=output_dir / "interactive_sleep_visualization.html"
+                )
+        except Exception as e:
+            logger.error(f"Error processing sleep efficiency data: {e}")
+    else:
+        logger.warning(f"Sleep efficiency data file not found: {sleep_efficiency_file}")
     
     # Load features
     features = load_features("mood_prediction")

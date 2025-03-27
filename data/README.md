@@ -6,7 +6,7 @@ This directory contains the data used for EEG-based REM sleep detection and mood
 
 The data is organized into subdirectories:
 
-- `raw/`: Raw EEG datasets and sleep-mood data
+- `raw/`: Raw EEG datasets
 - `processed/`: Processed data ready for feature extraction
 - `features/`: Extracted features for model training
 
@@ -28,12 +28,6 @@ Key files:
 - `*-PSG.edf`: Polysomnography recordings containing EEG channels
 - `*-Hypnogram.edf`: Sleep stage annotations
 
-### Sleep-Mood Dataset
-
-The Sleep-Mood dataset is a synthetic dataset generated for this project. It contains sleep metrics and corresponding mood ratings. It is stored in `raw/sleep-mood/`.
-
-Key file:
-- `sleep_mood_dataset.csv`: CSV file containing sleep metrics and mood ratings
 
 ## Processed Data
 
@@ -41,7 +35,7 @@ The processed data is organized by dataset:
 
 - `processed/sleep-edf/`: Processed Sleep-EDF data
 - `processed/sleep-cassette/`: Processed Sleep-Cassette data
-- `processed/sleep-mood/`: Processed Sleep-Mood data
+- `processed/sleep_efficiency_research_based.csv`: Sleep efficiency dataset with mood indicators
 
 Each processed file contains extracted features and sleep stage labels.
 

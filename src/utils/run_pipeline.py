@@ -41,7 +41,7 @@ def run_data_download(args):
     logger.info("Step 1: Downloading datasets")
     
     # Download datasets
-    datasets = args.datasets.split(',') if args.datasets else ["sleep-edf", "sleep-cassette", "sleep-mood"]
+    datasets = args.datasets.split(',') if args.datasets else ["sleep-edf", "sleep-cassette"]
     
     for dataset_name in datasets:
         download_dataset(dataset_name)
