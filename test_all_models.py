@@ -50,6 +50,86 @@ def load_features(task):
         print(f"Error loading features from {features_file}: {e}")
         return None
 
+def load_real_mood_data():
+    """
+    Load real sleep mood data for mood prediction task.
+    
+    Returns:
+        dict: Dictionary containing features similar to load_features() output
+    """
+    print("IMPORTANT: Using real sleep-mood data instead of synthetic data")
+    
+    # Define paths to real data
+    processed_data_path = DATA_DIR / "processed" / "sleep_efficiency_research_based.csv"
+    raw_data_path = DATA_DIR / "raw" / "sleep-mood" / "sleep_mood_dataset.csv"
+    
+    try:
+        # Try to load processed data first
+        if processed_data_path.exists():
+            df = pd.read_csv(processed_data_path)
+            print(f"Loaded processed data with {len(df)} records from {processed_data_path}")
+        # Fall back to raw data if necessary
+        elif raw_data_path.exists():
+            df = pd.read_csv(raw_data_path)
+            print(f"Loaded raw data with {len(df)} records from {raw_data_path}")
+        else:
+            print("No real data found. Please ensure data files exist.")
+            return None
+        
+        # For the sleep_efficiency_research_based.csv dataset
+        if 'good_mood' in df.columns:
+            # Features include sleep metrics and additional factors if available
+            sleep_features = ['total_sleep_time', 'wake_time', 'rem_time', 
+                            'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
+                            'rem_percentage']
+            
+            X = df[sleep_features]
+            y = df['good_mood']
+            
+        # For the sleep_mood_dataset.csv format
+        elif 'mood_rating' in df.columns:
+            # Create binary target: good mood if rating >= 7
+            df['good_mood'] = (df['mood_rating'] >= 7.0).astype(int)
+            
+            # Define features
+            sleep_features = ['total_sleep_time', 'wake_time', 'rem_time', 
+                            'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
+                            'rem_percentage', 'rem_cycles', 'rem_awakenings']
+            
+            X = df[sleep_features]
+            y = df['good_mood']
+        
+        else:
+            print("Unsupported data format. Missing expected columns.")
+            return None
+        
+        # Handle missing values if any
+        X = X.fillna(X.mean())
+        
+        # Split into train/test sets (80/20)
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y)
+        
+        # Create features dictionary similar to what load_features() returns
+        features = {
+            "X_train": X_train,
+            "y_train": y_train,
+            "X_test": X_test,
+            "y_test": y_test,
+            "feature_names": list(X.columns),
+            "task_name": "mood_prediction",
+            "n_samples": len(X),
+            "n_features": X.shape[1]
+        }
+        
+        print(f"Prepared dataset with {len(X)} records and {X.shape[1]} features")
+        return features
+            
+    except Exception as e:
+        print(f"Error loading real data: {e}")
+        return None
+
 def find_tuned_models(task):
     """
     Find all tuned models for a specific task.
@@ -119,11 +199,19 @@ def evaluate_model(model, X_test, y_test):
 
 def main():
     """Main function to evaluate all models."""
-    # Define the task
-    task = "rem_detection"
+    # Define the task (default to rem_detection, can be changed via command line)
+    if len(sys.argv) > 1:
+        task = sys.argv[1]
+    else:
+        task = "rem_detection"
     
-    # Load features
-    features = load_features(task)
+    print(f"Evaluating models for task: {task}")
+    
+    # Load features - use real data for mood prediction
+    if task == "mood_prediction":
+        features = load_real_mood_data()  # Use real data for mood prediction
+    else:
+        features = load_features(task)
     
     if features is None:
         return 1

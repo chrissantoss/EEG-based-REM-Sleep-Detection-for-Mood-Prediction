@@ -4,6 +4,8 @@
 """
 This script runs the entire EEG-based REM sleep detection pipeline.
 It is a convenience wrapper around the run_pipeline.py script in the src/utils directory.
+
+IMPORTANT NOTE: For all mood prediction tasks, this project MUST use real data, NOT synthetic data.
 """
 
 import os
@@ -31,6 +33,10 @@ def run_pipeline(args):
     Returns:
         int: Exit code
     """
+    # Ensure real data is used for mood prediction
+    if args.task and args.task in ["mood_prediction", "all"]:
+        logger.info("IMPORTANT: Using real data for mood prediction tasks. Synthetic data is NOT allowed.")
+    
     # Build the command
     cmd = [sys.executable, "src/utils/run_pipeline.py"]
     
@@ -70,6 +76,10 @@ def run_hyperparameter_tuning(args):
     Returns:
         int: Exit code
     """
+    # Ensure real data is used for mood prediction
+    if args.task and args.task in ["mood_prediction", "all"]:
+        logger.info("IMPORTANT: Using real data for mood prediction tasks. Synthetic data is NOT allowed.")
+    
     # Build the command
     cmd = [sys.executable, "src/models/hyperparameter_tuning.py"]
     

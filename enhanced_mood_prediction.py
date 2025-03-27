@@ -214,13 +214,16 @@ class EnhancedMoodPredictor:
             X, y, test_size=0.2, random_state=42
         )
         
-        # Store continuous mood score for analysis
-        mood_score_train = X_train['mood_score'].copy()
-        mood_score_test = X_test['mood_score'].copy()
-        
-        # Remove mood_score from features
-        X_train = X_train.drop('mood_score', axis=1)
-        X_test = X_test.drop('mood_score', axis=1)
+        # Store continuous mood score for analysis if available
+        mood_score_train = None
+        mood_score_test = None
+        if 'mood_score' in X_train.columns:
+            mood_score_train = X_train['mood_score'].copy()
+            mood_score_test = X_test['mood_score'].copy()
+            
+            # Remove mood_score from features
+            X_train = X_train.drop('mood_score', axis=1)
+            X_test = X_test.drop('mood_score', axis=1)
         
         # Determine which model to use based on base model
         if self.base_model_name == "xgboost" or self.base_model_name.startswith("xgboost_"):
@@ -294,23 +297,24 @@ class EnhancedMoodPredictor:
             plt.savefig(importance_plot_path)
             logger.info(f"Saved feature importance plot to {importance_plot_path}")
         
-        # Analyze the relationship between predictions and continuous mood score
-        plt.figure(figsize=(10, 6))
-        plt.scatter(mood_score_test, y_prob, alpha=0.5)
-        plt.xlabel('Actual Mood Score (0-10)')
-        plt.ylabel('Predicted Probability of Good Mood')
-        plt.title('Relationship Between Mood Score and Model Predictions')
-        plt.grid(True)
-        
-        # Add best fit line
-        z = np.polyfit(mood_score_test, y_prob, 1)
-        p = np.poly1d(z)
-        plt.plot(range(11), p(range(11)), "r--")
-        
-        # Save plot
-        correlation_plot_path = ENHANCED_DIR / f"{self.base_model_name}_correlation.png"
-        plt.savefig(correlation_plot_path)
-        logger.info(f"Saved correlation plot to {correlation_plot_path}")
+        # Analyze the relationship between predictions and continuous mood score if available
+        if mood_score_test is not None:
+            plt.figure(figsize=(10, 6))
+            plt.scatter(mood_score_test, y_prob, alpha=0.5)
+            plt.xlabel('Actual Mood Score (0-10)')
+            plt.ylabel('Predicted Probability of Good Mood')
+            plt.title('Relationship Between Mood Score and Model Predictions')
+            plt.grid(True)
+            
+            # Add best fit line
+            z = np.polyfit(mood_score_test, y_prob, 1)
+            p = np.poly1d(z)
+            plt.plot(range(11), p(range(11)), "r--")
+            
+            # Save plot
+            correlation_plot_path = ENHANCED_DIR / f"{self.base_model_name}_correlation.png"
+            plt.savefig(correlation_plot_path)
+            logger.info(f"Saved correlation plot to {correlation_plot_path}")
         
         # Create metadata
         metadata = {
@@ -358,13 +362,37 @@ class EnhancedMoodPredictor:
                 input_data.update(additional_factors)
             
             # Ensure all required factors are present
+            missing_factors = []
             for factor in ADDITIONAL_FACTORS:
                 if factor not in input_data:
                     input_data[factor] = 0  # Default to 0 if not provided
+                    missing_factors.append(factor)
             
-            # Convert to DataFrame
+            # Get the features that the model was trained on
+            if hasattr(self.enhanced_model, 'feature_names_in_'):
+                # For newer scikit-learn versions
+                expected_features = self.enhanced_model.feature_names_in_
+            else:
+                # Fallback to a basic list of features
+                expected_features = [
+                    'total_sleep_time', 'wake_time', 'rem_time', 
+                    'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
+                    'rem_percentage'
+                ] + ADDITIONAL_FACTORS
+                
+            # Create DataFrame with all expected features
             X = pd.DataFrame([input_data])
             
+            # Check for missing expected features and add them
+            for feature in expected_features:
+                if feature not in X.columns:
+                    logger.warning(f"Adding missing feature for prediction: {feature}")
+                    X[feature] = 0
+                        
+            # Ensure we only use the features the model expects
+            if hasattr(self.enhanced_model, 'feature_names_in_'):
+                X = X[self.enhanced_model.feature_names_in_]
+                    
             # Make prediction
             prediction = bool(self.enhanced_model.predict(X)[0])
             probability = float(self.enhanced_model.predict_proba(X)[0, 1])
@@ -375,7 +403,7 @@ class EnhancedMoodPredictor:
                 'probability': probability,
                 'mood_score': probability * 10,  # Scale to 0-10
                 'includes_additional_factors': True,
-                'missing_factors': [f for f in ADDITIONAL_FACTORS if f not in additional_factors] if additional_factors else ADDITIONAL_FACTORS
+                'missing_factors': missing_factors
             }
             
             # Add feature contribution if available
@@ -403,10 +431,10 @@ class EnhancedMoodPredictor:
     
     def compare_with_base_model(self, n_samples=100):
         """
-        Compare enhanced model with base model on synthetic data.
+        Compare enhanced model with base model on real data.
         
         Args:
-            n_samples (int): Number of samples to use for comparison
+            n_samples (int): Maximum number of samples to use for comparison
             
         Returns:
             dict: Comparison results
@@ -416,35 +444,55 @@ class EnhancedMoodPredictor:
             return None
         
         try:
-            # Generate synthetic test data
-            X, y = self.generate_synthetic_data(n_samples)
+            # Load real test data
+            X, y = self.load_real_data()
             
-            # Store continuous mood score
-            mood_score = X['mood_score'].copy()
+            if X is None or y is None:
+                logger.error("Failed to load real data for comparison")
+                return None
+                
+            # Limit samples if needed
+            if len(X) > n_samples:
+                # Use stratified sampling to maintain class distribution
+                from sklearn.model_selection import train_test_split
+                _, X, _, y = train_test_split(X, y, test_size=n_samples/len(X), stratify=y, random_state=42)
+                logger.info(f"Using {len(X)} samples for comparison")
+                
+            # Store mood score if available
+            mood_score = None
+            if 'mood_score' in X.columns:
+                mood_score = X['mood_score'].copy()
+                X = X.drop('mood_score', axis=1)
             
-            # Remove mood_score from features
-            X = X.drop('mood_score', axis=1)
+            # Prepare data for base model - handle feature mismatch
+            X_base = X.copy()
             
-            # Prepare data for base model
+            # Check if we need to add missing features for the base model
             if self.base_metadata and 'selected_features' in self.base_metadata:
                 selected_features = self.base_metadata['selected_features']
-                missing_features = [f for f in selected_features if f not in X.columns]
+                missing_features = [f for f in selected_features if f not in X_base.columns]
                 
-                if missing_features:
-                    logger.warning(f"Missing features for base model: {missing_features}")
-                    # Fill missing features with default values
-                    for feature in missing_features:
-                        X[feature] = 0
-                
-                X_base = X[selected_features]
-            else:
-                # Use sleep-related features only
-                sleep_features = [
-                    'total_sleep_time', 'wake_time', 'rem_time', 
-                    'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
-                    'rem_percentage', 'rem_cycles', 'rem_awakenings'
-                ]
-                X_base = X[sleep_features]
+                # Add missing features with zero values
+                for feature in missing_features:
+                    logger.warning(f"Adding missing feature for base model: {feature}")
+                    X_base[feature] = 0
+                    
+                # Only use the selected features
+                X_base = X_base[selected_features]
+            
+            # Check for base model features that don't exist in real data
+            expected_base_features = list(X_base.columns)
+            
+            logger.info(f"Features used for base model: {expected_base_features}")
+            
+            # Add any missing features for the enhanced model
+            expected_enhanced_features = list(X.columns)
+            for feature in ADDITIONAL_FACTORS:
+                if feature not in X.columns:
+                    logger.warning(f"Adding missing additional factor: {feature}")
+                    X[feature] = 0
+            
+            logger.info(f"Features used for enhanced model: {list(X.columns)}")
             
             # Make predictions
             base_pred = self.base_model.predict(X_base)
@@ -487,7 +535,7 @@ class EnhancedMoodPredictor:
                     'metrics': enhanced_metrics
                 },
                 'differences': diff_metrics,
-                'sample_size': n_samples
+                'sample_size': len(X)
             }
             
             # Log results
@@ -535,6 +583,74 @@ class EnhancedMoodPredictor:
             logger.error(f"Error comparing models: {e}")
             return None
 
+    def load_real_data(self):
+        """
+        Load real sleep mood data from the dataset.
+        
+        Returns:
+            tuple: (X, y) - features and labels
+        """
+        logger.info("Loading real sleep mood data")
+        
+        # Define paths to real data
+        processed_data_path = DATA_DIR / "processed" / "sleep_efficiency_research_based.csv"
+        raw_data_path = DATA_DIR / "raw" / "sleep-mood" / "sleep_mood_dataset.csv"
+        
+        try:
+            # Try to load processed data first
+            if processed_data_path.exists():
+                df = pd.read_csv(processed_data_path)
+                logger.info(f"Loaded processed data with {len(df)} records from {processed_data_path}")
+            # Fall back to raw data if necessary
+            elif raw_data_path.exists():
+                df = pd.read_csv(raw_data_path)
+                logger.info(f"Loaded raw data with {len(df)} records from {raw_data_path}")
+            else:
+                logger.error("No real data found. Please ensure data files exist.")
+                return None, None
+            
+            # For the sleep_efficiency_research_based.csv dataset
+            if 'good_mood' in df.columns:
+                # Features include sleep metrics and additional factors if available
+                sleep_features = ['total_sleep_time', 'wake_time', 'rem_time', 
+                                'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
+                                'rem_percentage']
+                
+                additional_features = []
+                for factor in ADDITIONAL_FACTORS:
+                    if factor in df.columns:
+                        additional_features.append(factor)
+                
+                X = df[sleep_features + additional_features]
+                y = df['good_mood']
+                
+            # For the sleep_mood_dataset.csv format
+            elif 'mood_rating' in df.columns:
+                # Create binary target: good mood if rating >= 7
+                df['good_mood'] = (df['mood_rating'] >= 7.0).astype(int)
+                
+                # Define features
+                sleep_features = ['total_sleep_time', 'wake_time', 'rem_time', 
+                                'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
+                                'rem_percentage', 'rem_cycles', 'rem_awakenings']
+                
+                X = df[sleep_features]
+                y = df['good_mood']
+            
+            else:
+                logger.error("Unsupported data format. Missing expected columns.")
+                return None, None
+            
+            # Handle missing values if any
+            X = X.fillna(X.mean())
+            
+            logger.info(f"Prepared dataset with {len(X)} records and {X.shape[1]} features")
+            return X, y
+            
+        except Exception as e:
+            logger.error(f"Error loading real data: {e}")
+            return None, None
+
 def main():
     """Main function to demonstrate enhanced mood prediction."""
     logger.info("Enhancing mood prediction with additional factors")
@@ -542,14 +658,19 @@ def main():
     # Create enhanced predictor
     predictor = EnhancedMoodPredictor("xgboost")
     
-    # Generate synthetic data
-    X, y = predictor.generate_synthetic_data(n_samples=2000)
+    # IMPORTANT: Use real data for mood prediction, NOT synthetic data
+    X, y = predictor.load_real_data()
+    
+    # Check if data was loaded successfully
+    if X is None or y is None:
+        logger.error("Failed to load real data. Cannot proceed with training.")
+        return 1
     
     # Train enhanced model
     model, metadata = predictor.train_enhanced_model(X, y)
     
     # Compare with base model
-    comparison = predictor.compare_with_base_model(n_samples=500)
+    comparison = predictor.compare_with_base_model(n_samples=100)
     
     # Demonstrate prediction
     test_sleep_metrics = {

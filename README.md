@@ -2,6 +2,21 @@
 
 This project analyzes EEG data to detect REM sleep patterns and predict mood upon waking. It implements various machine learning models to establish relationships between sleep quality metrics and emotional states.
 
+## IMPORTANT NOTE: REAL DATA USAGE
+
+**This project MUST use real sleep and mood data for all mood prediction tasks, NOT synthetic data.**
+
+* All mood prediction models should be trained and evaluated using the real datasets:
+  * `data/processed/sleep_efficiency_research_based.csv` 
+  * `data/raw/sleep-mood/sleep_mood_dataset.csv`
+* The file `create_mock_data.py` should NOT be used for mood prediction
+* The `generate_synthetic_data()` function in `enhanced_mood_prediction.py` should NOT be used
+
+The project has been updated to ensure that:
+1. `enhanced_mood_prediction.py` now uses real data for training and comparison
+2. `test_all_models.py` now uses real data for evaluating mood prediction models
+3. All mood prediction models are trained and validated with real participant data
+
 ## Project Overview
 
 Sleep quality, particularly during REM phases, has significant impacts on mood and cognitive function. This project:
