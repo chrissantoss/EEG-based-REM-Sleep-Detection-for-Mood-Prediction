@@ -1,0 +1,595 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+This script enhances mood prediction by incorporating additional lifestyle factors
+beyond sleep metrics, such as stress, exercise, diet, and caffeine consumption.
+"""
+
+import os
+import sys
+import logging
+import numpy as np
+import pandas as pd
+import joblib
+import json
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.preprocessing import StandardScaler
+import xgboost as xgb
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+# Define directories
+ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
+MODELS_DIR = ROOT_DIR / "models"
+ENHANCED_DIR = MODELS_DIR / "enhanced_models"
+ENHANCED_DIR.mkdir(parents=True, exist_ok=True)
+
+# Define additional factors that may influence mood
+ADDITIONAL_FACTORS = [
+    'stress_level',           # 0-10 scale
+    'exercise_minutes',       # Minutes of exercise
+    'caffeine_mg',            # Milligrams of caffeine
+    'screen_time_minutes',    # Minutes of screen time before bed
+    'alcohol_units',          # Units of alcohol consumed
+    'outdoor_time_minutes',   # Minutes spent outdoors
+    'social_interaction_score', # 0-10 scale of social interaction
+    'meditation_minutes'      # Minutes spent meditating
+]
+
+class EnhancedMoodPredictor:
+    """Class for enhanced mood prediction with additional factors."""
+    
+    def __init__(self, base_model_name="xgboost"):
+        """
+        Initialize the enhanced mood predictor.
+        
+        Args:
+            base_model_name (str): Name of the base model to enhance
+        """
+        self.base_model_name = base_model_name
+        
+        # Load base model
+        self.base_model, self.base_metadata = self.load_base_model()
+        
+        # Initialize enhanced model
+        self.enhanced_model = None
+        self.enhanced_metadata = None
+        
+        # Path for enhanced model
+        self.enhanced_model_path = ENHANCED_DIR / f"{base_model_name}_enhanced.joblib"
+        self.enhanced_metadata_path = ENHANCED_DIR / f"{base_model_name}_enhanced_metadata.joblib"
+        
+        # Try to load existing enhanced model
+        if self.enhanced_model_path.exists() and self.enhanced_metadata_path.exists():
+            try:
+                self.enhanced_model = joblib.load(self.enhanced_model_path)
+                self.enhanced_metadata = joblib.load(self.enhanced_metadata_path)
+                logger.info(f"Loaded enhanced model: {self.enhanced_model_path}")
+            except Exception as e:
+                logger.error(f"Error loading enhanced model: {e}")
+    
+    def load_base_model(self):
+        """
+        Load the base model for mood prediction.
+        
+        Returns:
+            tuple: (model, metadata) or (None, None) if loading fails
+        """
+        model_path = MODELS_DIR / "mood_prediction" / f"{self.base_model_name}.joblib"
+        metadata_path = MODELS_DIR / "mood_prediction" / f"{self.base_model_name}_metadata.joblib"
+        
+        # Check for refined models first
+        refined_model_path = MODELS_DIR / "mood_prediction" / f"{self.base_model_name}_refined.joblib"
+        refined_metadata_path = MODELS_DIR / "mood_prediction" / f"{self.base_model_name}_refined_metadata.joblib"
+        
+        if refined_model_path.exists() and refined_metadata_path.exists():
+            model_path = refined_model_path
+            metadata_path = refined_metadata_path
+        
+        if not model_path.exists() or not metadata_path.exists():
+            logger.error(f"Base model not found: {model_path}")
+            return None, None
+        
+        try:
+            model = joblib.load(model_path)
+            metadata = joblib.load(metadata_path)
+            
+            logger.info(f"Loaded base model: {model_path}")
+            return model, metadata
+        
+        except Exception as e:
+            logger.error(f"Error loading base model: {e}")
+            return None, None
+    
+    def generate_synthetic_data(self, n_samples=1000):
+        """
+        Generate synthetic data with sleep metrics and additional factors.
+        
+        Args:
+            n_samples (int): Number of samples to generate
+            
+        Returns:
+            tuple: (X, y) - features and labels
+        """
+        logger.info(f"Generating {n_samples} synthetic data samples")
+        
+        # Create pandas DataFrame for features
+        X = pd.DataFrame()
+        
+        # Generate sleep metrics
+        X['total_sleep_time'] = np.random.normal(420, 60, n_samples)  # Mean 7 hours
+        X['wake_time'] = np.random.normal(30, 20, n_samples)
+        X['rem_time'] = np.random.normal(90, 30, n_samples)
+        X['light_sleep_time'] = X['total_sleep_time'] * 0.55 + np.random.normal(0, 20, n_samples)
+        X['deep_sleep_time'] = X['total_sleep_time'] - X['light_sleep_time'] - X['rem_time'] - X['wake_time']
+        X['sleep_efficiency'] = 100 * (X['total_sleep_time'] - X['wake_time']) / X['total_sleep_time']
+        X['rem_percentage'] = 100 * X['rem_time'] / X['total_sleep_time']
+        X['rem_cycles'] = np.random.randint(2, 6, n_samples)
+        X['rem_awakenings'] = np.random.randint(0, 8, n_samples)
+        
+        # Ensure all sleep metrics are reasonable
+        X['deep_sleep_time'] = X['deep_sleep_time'].apply(lambda x: max(0, x))
+        X['sleep_efficiency'] = X['sleep_efficiency'].clip(50, 100)
+        X['rem_percentage'] = X['rem_percentage'].clip(5, 35)
+        
+        # Generate additional factors
+        X['stress_level'] = np.random.randint(1, 11, n_samples)
+        X['exercise_minutes'] = np.random.exponential(30, n_samples)
+        X['caffeine_mg'] = np.random.choice([0, 80, 160, 240, 320], n_samples)
+        X['screen_time_minutes'] = np.random.exponential(60, n_samples)
+        X['alcohol_units'] = np.random.choice([0, 1, 2, 3, 4, 5], n_samples, p=[0.3, 0.3, 0.2, 0.1, 0.05, 0.05])
+        X['outdoor_time_minutes'] = np.random.exponential(45, n_samples)
+        X['social_interaction_score'] = np.random.randint(1, 11, n_samples)
+        X['meditation_minutes'] = np.random.exponential(10, n_samples)
+        
+        # Create target variable (mood) based on a complex relationship with features
+        # Good sleep + low stress + exercise + low alcohol/caffeine = better mood
+        
+        # Normalize the key factors to 0-1 range
+        sleep_quality = (X['sleep_efficiency'] - 50) / 50  # 50-100 → 0-1
+        rem_quality = (X['rem_percentage'] - 5) / 30  # 5-35 → 0-1
+        stress_factor = (10 - X['stress_level']) / 10  # 10-1 → 0-1
+        exercise_factor = np.minimum(X['exercise_minutes'] / 60, 1)  # 0-60+ → 0-1
+        caffeine_factor = 1 - (X['caffeine_mg'] / 320)  # 0-320 → 1-0
+        alcohol_factor = 1 - (X['alcohol_units'] / 5)  # 0-5 → 1-0
+        outdoor_factor = np.minimum(X['outdoor_time_minutes'] / 90, 1)  # 0-90+ → 0-1
+        social_factor = (X['social_interaction_score'] - 1) / 9  # 1-10 → 0-1
+        meditation_factor = np.minimum(X['meditation_minutes'] / 20, 1)  # 0-20+ → 0-1
+        
+        # Combine factors with weights
+        mood_score = (
+            0.25 * sleep_quality + 
+            0.15 * rem_quality + 
+            0.15 * stress_factor + 
+            0.10 * exercise_factor + 
+            0.05 * caffeine_factor + 
+            0.10 * alcohol_factor +
+            0.10 * outdoor_factor +
+            0.05 * social_factor +
+            0.05 * meditation_factor
+        )
+        
+        # Add some random noise
+        mood_score = mood_score + np.random.normal(0, 0.1, n_samples)
+        
+        # Clip to 0-1 range
+        mood_score = np.clip(mood_score, 0, 1)
+        
+        # Convert to binary (good mood = score >= 0.6)
+        y = (mood_score >= 0.6).astype(int)
+        
+        # Also store the continuous mood score for analysis
+        X['mood_score'] = mood_score * 10  # Scale to 0-10
+        
+        return X, y
+    
+    def train_enhanced_model(self, X, y):
+        """
+        Train an enhanced model that incorporates additional factors.
+        
+        Args:
+            X (pd.DataFrame): Feature data
+            y (pd.Series): Labels
+            
+        Returns:
+            tuple: (model, metadata)
+        """
+        logger.info("Training enhanced model")
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        # Store continuous mood score for analysis
+        mood_score_train = X_train['mood_score'].copy()
+        mood_score_test = X_test['mood_score'].copy()
+        
+        # Remove mood_score from features
+        X_train = X_train.drop('mood_score', axis=1)
+        X_test = X_test.drop('mood_score', axis=1)
+        
+        # Determine which model to use based on base model
+        if self.base_model_name == "xgboost" or self.base_model_name.startswith("xgboost_"):
+            # Use XGBoost
+            model = xgb.XGBClassifier(
+                learning_rate=0.05,
+                max_depth=4,
+                n_estimators=200,
+                subsample=0.9,
+                colsample_bytree=0.9,
+                random_state=42,
+                use_label_encoder=False,
+                eval_metric='logloss'
+            )
+        else:
+            # Use Random Forest
+            model = RandomForestClassifier(
+                n_estimators=200,
+                max_depth=15,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                random_state=42
+            )
+        
+        # Train model
+        model.fit(X_train, y_train)
+        
+        # Evaluate model
+        y_pred = model.predict(X_test)
+        y_prob = model.predict_proba(X_test)[:, 1]
+        
+        # Calculate metrics
+        metrics = {
+            'accuracy': float(accuracy_score(y_test, y_pred)),
+            'precision': float(precision_score(y_test, y_pred)),
+            'recall': float(recall_score(y_test, y_pred)),
+            'f1': float(f1_score(y_test, y_pred)),
+            'roc_auc': float(roc_auc_score(y_test, y_prob))
+        }
+        
+        logger.info("Performance metrics:")
+        for metric, value in metrics.items():
+            logger.info(f"  {metric}: {value:.4f}")
+        
+        # Calculate feature importance
+        if hasattr(model, 'feature_importances_'):
+            importance = model.feature_importances_
+            indices = np.argsort(importance)[::-1]
+            features = X_train.columns
+            
+            # Create feature importance DataFrame
+            importance_df = pd.DataFrame({
+                'feature': features,
+                'importance': importance
+            }).sort_values('importance', ascending=False)
+            
+            logger.info("\nTop 10 most important features:")
+            for i, feature in enumerate(importance_df['feature'][:10]):
+                logger.info(f"  {i+1}. {feature}: {importance_df['importance'].iloc[i]:.4f}")
+            
+            # Plot feature importance
+            plt.figure(figsize=(12, 8))
+            plt.barh(features[indices][:15], importance[indices][:15])
+            plt.xlabel('Importance')
+            plt.ylabel('Feature')
+            plt.title('Feature Importance for Enhanced Mood Prediction')
+            plt.tight_layout()
+            
+            # Save plot
+            importance_plot_path = ENHANCED_DIR / f"{self.base_model_name}_importance.png"
+            plt.savefig(importance_plot_path)
+            logger.info(f"Saved feature importance plot to {importance_plot_path}")
+        
+        # Analyze the relationship between predictions and continuous mood score
+        plt.figure(figsize=(10, 6))
+        plt.scatter(mood_score_test, y_prob, alpha=0.5)
+        plt.xlabel('Actual Mood Score (0-10)')
+        plt.ylabel('Predicted Probability of Good Mood')
+        plt.title('Relationship Between Mood Score and Model Predictions')
+        plt.grid(True)
+        
+        # Add best fit line
+        z = np.polyfit(mood_score_test, y_prob, 1)
+        p = np.poly1d(z)
+        plt.plot(range(11), p(range(11)), "r--")
+        
+        # Save plot
+        correlation_plot_path = ENHANCED_DIR / f"{self.base_model_name}_correlation.png"
+        plt.savefig(correlation_plot_path)
+        logger.info(f"Saved correlation plot to {correlation_plot_path}")
+        
+        # Create metadata
+        metadata = {
+            'model_name': f"{self.base_model_name}_enhanced",
+            'metrics': metrics,
+            'feature_importance': importance_df.to_dict() if hasattr(model, 'feature_importances_') else None,
+            'includes_additional_factors': True,
+            'additional_factors': ADDITIONAL_FACTORS,
+            'description': 'Enhanced model incorporating additional lifestyle factors beyond sleep metrics'
+        }
+        
+        # Save model and metadata
+        joblib.dump(model, self.enhanced_model_path)
+        joblib.dump(metadata, self.enhanced_metadata_path)
+        
+        logger.info(f"Saved enhanced model to {self.enhanced_model_path}")
+        
+        self.enhanced_model = model
+        self.enhanced_metadata = metadata
+        
+        return model, metadata
+    
+    def predict_mood(self, sleep_metrics, additional_factors=None):
+        """
+        Predict mood based on sleep metrics and additional factors.
+        
+        Args:
+            sleep_metrics (dict): Sleep metrics
+            additional_factors (dict, optional): Additional lifestyle factors
+            
+        Returns:
+            dict: Prediction results
+        """
+        # Check if enhanced model is available
+        if self.enhanced_model is None:
+            logger.error("Enhanced model not available. Train model first.")
+            return None
+        
+        try:
+            # Combine input data
+            input_data = sleep_metrics.copy()
+            
+            # Add additional factors if provided
+            if additional_factors:
+                input_data.update(additional_factors)
+            
+            # Ensure all required factors are present
+            for factor in ADDITIONAL_FACTORS:
+                if factor not in input_data:
+                    input_data[factor] = 0  # Default to 0 if not provided
+            
+            # Convert to DataFrame
+            X = pd.DataFrame([input_data])
+            
+            # Make prediction
+            prediction = bool(self.enhanced_model.predict(X)[0])
+            probability = float(self.enhanced_model.predict_proba(X)[0, 1])
+            
+            # Create result
+            result = {
+                'good_mood': prediction,
+                'probability': probability,
+                'mood_score': probability * 10,  # Scale to 0-10
+                'includes_additional_factors': True,
+                'missing_factors': [f for f in ADDITIONAL_FACTORS if f not in additional_factors] if additional_factors else ADDITIONAL_FACTORS
+            }
+            
+            # Add feature contribution if available
+            if hasattr(self.enhanced_model, 'feature_importances_'):
+                # Multiply feature values by importance to get contribution
+                feature_importance = {
+                    feature: float(self.enhanced_model.feature_importances_[i])
+                    for i, feature in enumerate(X.columns)
+                }
+                
+                # Sort by absolute contribution
+                result['feature_importance'] = {
+                    k: v for k, v in sorted(
+                        feature_importance.items(), 
+                        key=lambda item: abs(item[1]), 
+                        reverse=True
+                    )
+                }
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error predicting mood: {e}")
+            return None
+    
+    def compare_with_base_model(self, n_samples=100):
+        """
+        Compare enhanced model with base model on synthetic data.
+        
+        Args:
+            n_samples (int): Number of samples to use for comparison
+            
+        Returns:
+            dict: Comparison results
+        """
+        if self.base_model is None or self.enhanced_model is None:
+            logger.error("Both base and enhanced models must be available for comparison")
+            return None
+        
+        try:
+            # Generate synthetic test data
+            X, y = self.generate_synthetic_data(n_samples)
+            
+            # Store continuous mood score
+            mood_score = X['mood_score'].copy()
+            
+            # Remove mood_score from features
+            X = X.drop('mood_score', axis=1)
+            
+            # Prepare data for base model
+            if self.base_metadata and 'selected_features' in self.base_metadata:
+                selected_features = self.base_metadata['selected_features']
+                missing_features = [f for f in selected_features if f not in X.columns]
+                
+                if missing_features:
+                    logger.warning(f"Missing features for base model: {missing_features}")
+                    # Fill missing features with default values
+                    for feature in missing_features:
+                        X[feature] = 0
+                
+                X_base = X[selected_features]
+            else:
+                # Use sleep-related features only
+                sleep_features = [
+                    'total_sleep_time', 'wake_time', 'rem_time', 
+                    'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
+                    'rem_percentage', 'rem_cycles', 'rem_awakenings'
+                ]
+                X_base = X[sleep_features]
+            
+            # Make predictions
+            base_pred = self.base_model.predict(X_base)
+            base_prob = self.base_model.predict_proba(X_base)[:, 1]
+            
+            enhanced_pred = self.enhanced_model.predict(X)
+            enhanced_prob = self.enhanced_model.predict_proba(X)[:, 1]
+            
+            # Calculate metrics
+            base_metrics = {
+                'accuracy': float(accuracy_score(y, base_pred)),
+                'precision': float(precision_score(y, base_pred)),
+                'recall': float(recall_score(y, base_pred)),
+                'f1': float(f1_score(y, base_pred)),
+                'roc_auc': float(roc_auc_score(y, base_prob))
+            }
+            
+            enhanced_metrics = {
+                'accuracy': float(accuracy_score(y, enhanced_pred)),
+                'precision': float(precision_score(y, enhanced_pred)),
+                'recall': float(recall_score(y, enhanced_pred)),
+                'f1': float(f1_score(y, enhanced_pred)),
+                'roc_auc': float(roc_auc_score(y, enhanced_prob))
+            }
+            
+            # Calculate differences
+            diff_metrics = {
+                metric: enhanced_metrics[metric] - base_metrics[metric]
+                for metric in base_metrics
+            }
+            
+            # Create comparison result
+            comparison = {
+                'base_model': {
+                    'name': self.base_model_name,
+                    'metrics': base_metrics
+                },
+                'enhanced_model': {
+                    'name': f"{self.base_model_name}_enhanced",
+                    'metrics': enhanced_metrics
+                },
+                'differences': diff_metrics,
+                'sample_size': n_samples
+            }
+            
+            # Log results
+            logger.info("\nModel Comparison Results:")
+            logger.info(f"Base Model ({self.base_model_name}):")
+            for metric, value in base_metrics.items():
+                logger.info(f"  {metric}: {value:.4f}")
+            
+            logger.info(f"\nEnhanced Model ({self.base_model_name}_enhanced):")
+            for metric, value in enhanced_metrics.items():
+                logger.info(f"  {metric}: {value:.4f}")
+            
+            logger.info("\nImprovement:")
+            for metric, diff in diff_metrics.items():
+                sign = '+' if diff >= 0 else ''
+                logger.info(f"  {metric}: {sign}{diff:.4f} ({diff/base_metrics[metric]*100:.1f}%)")
+            
+            # Visualize comparison
+            plt.figure(figsize=(12, 6))
+            metrics = list(base_metrics.keys())
+            base_values = [base_metrics[m] for m in metrics]
+            enhanced_values = [enhanced_metrics[m] for m in metrics]
+            
+            x = range(len(metrics))
+            width = 0.35
+            
+            plt.bar([i - width/2 for i in x], base_values, width, label='Base Model')
+            plt.bar([i + width/2 for i in x], enhanced_values, width, label='Enhanced Model')
+            
+            plt.xlabel('Metric')
+            plt.ylabel('Value')
+            plt.title('Model Performance Comparison')
+            plt.xticks(x, metrics)
+            plt.legend()
+            plt.grid(True, axis='y')
+            
+            # Save plot
+            comparison_plot_path = ENHANCED_DIR / f"{self.base_model_name}_comparison.png"
+            plt.savefig(comparison_plot_path)
+            logger.info(f"Saved comparison plot to {comparison_plot_path}")
+            
+            return comparison
+        
+        except Exception as e:
+            logger.error(f"Error comparing models: {e}")
+            return None
+
+def main():
+    """Main function to demonstrate enhanced mood prediction."""
+    logger.info("Enhancing mood prediction with additional factors")
+    
+    # Create enhanced predictor
+    predictor = EnhancedMoodPredictor("xgboost")
+    
+    # Generate synthetic data
+    X, y = predictor.generate_synthetic_data(n_samples=2000)
+    
+    # Train enhanced model
+    model, metadata = predictor.train_enhanced_model(X, y)
+    
+    # Compare with base model
+    comparison = predictor.compare_with_base_model(n_samples=500)
+    
+    # Demonstrate prediction
+    test_sleep_metrics = {
+        'total_sleep_time': 450,  # 7.5 hours
+        'wake_time': 20,
+        'rem_time': 100,
+        'light_sleep_time': 240,
+        'deep_sleep_time': 90,
+        'sleep_efficiency': 95,
+        'rem_percentage': 22,
+        'rem_cycles': 4,
+        'rem_awakenings': 2
+    }
+    
+    test_additional_factors = {
+        'stress_level': 3,            # Low stress (1-10)
+        'exercise_minutes': 45,        # 45 minutes of exercise
+        'caffeine_mg': 160,            # 2 cups of coffee
+        'screen_time_minutes': 30,     # 30 minutes before bed
+        'alcohol_units': 1,            # 1 alcoholic drink
+        'outdoor_time_minutes': 60,    # 1 hour outdoors
+        'social_interaction_score': 7, # Good social day
+        'meditation_minutes': 15       # 15 minutes of meditation
+    }
+    
+    # Make prediction
+    result = predictor.predict_mood(test_sleep_metrics, test_additional_factors)
+    
+    if result:
+        logger.info("\nMood Prediction for Test Input:")
+        logger.info(f"  Predicted mood: {'Good' if result['good_mood'] else 'Bad'}")
+        logger.info(f"  Confidence: {result['probability']:.2f}")
+        logger.info(f"  Mood score (0-10): {result['mood_score']:.1f}")
+        
+        if 'feature_importance' in result:
+            logger.info("\nTop 5 factors influencing this prediction:")
+            for i, (feature, importance) in enumerate(list(result['feature_importance'].items())[:5]):
+                logger.info(f"  {i+1}. {feature}: {importance:.4f}")
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main()) 
