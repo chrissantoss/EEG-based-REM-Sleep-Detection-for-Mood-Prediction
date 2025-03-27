@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "rem_detection": {
+      "models": {
+        "random_forest": {
+          "status": "failed",
+          "duration": 8.177006006240845
+        }
+      }
+    }
+  },
+  "total_tuning_time": 8.177048683166504,
+  "started_at": "2025-03-27T13:17:26.258114",
+  "completed_at": "2025-03-27T13:17:34.435168"
+}

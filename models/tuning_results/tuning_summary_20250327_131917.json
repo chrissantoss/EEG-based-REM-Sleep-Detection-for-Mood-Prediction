@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "rem_detection": {
+      "models": {
+        "logistic_regression": {
+          "status": "failed",
+          "duration": 1.0882420539855957
+        }
+      }
+    }
+  },
+  "total_tuning_time": 1.0882792472839355,
+  "started_at": "2025-03-27T13:19:16.374758",
+  "completed_at": "2025-03-27T13:19:17.463044"
+}

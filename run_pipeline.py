@@ -89,6 +89,12 @@ def run_hyperparameter_tuning(args):
     if args.scoring:
         cmd.extend(["--scoring", args.scoring])
     
+    if args.output_dir:
+        cmd.extend(["--output_dir", args.output_dir])
+    
+    if args.optimize_all:
+        cmd.extend(["--optimize_all"])
+    
     # Run the command
     logger.info(f"Running hyperparameter tuning command: {' '.join(cmd)}")
     
@@ -196,9 +202,18 @@ def main():
     )
     tune_parser.add_argument(
         "--scoring", 
-        choices=["accuracy", "precision", "recall", "f1", "roc_auc"],
+        choices=["accuracy", "precision", "recall", "f1", "roc_auc", "all"],
         default="f1",
         help="Scoring metric for hyperparameter tuning (default: f1)"
+    )
+    tune_parser.add_argument(
+        "--output_dir",
+        help="Custom directory to save tuning results"
+    )
+    tune_parser.add_argument(
+        "--optimize_all",
+        action="store_true",
+        help="Run a more comprehensive tuning process with higher iterations"
     )
     
     # Visualization command

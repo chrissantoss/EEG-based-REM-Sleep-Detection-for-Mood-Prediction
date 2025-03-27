@@ -1,0 +1,190 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+This script evaluates all tuned models and compares their performance.
+"""
+
+import os
+import sys
+import joblib
+import numpy as np
+import pandas as pd
+from pathlib import Path
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    roc_auc_score, confusion_matrix, classification_report
+)
+
+# Define the root directory
+ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
+FEATURES_DIR = DATA_DIR / "features"
+MODELS_DIR = ROOT_DIR / "models"
+
+def load_features(task):
+    """
+    Load extracted features for a specific task.
+    
+    Args:
+        task (str): Task name ('rem_detection' or 'mood_prediction')
+    
+    Returns:
+        dict: Dictionary containing features
+    """
+    # Determine the features file
+    features_file = FEATURES_DIR / f"{task}_features.joblib"
+    
+    # Check if the file exists
+    if not features_file.exists():
+        print(f"Features file not found: {features_file}")
+        return None
+    
+    try:
+        # Load the features
+        features = joblib.load(features_file)
+        print(f"Loaded features for {task} from {features_file}")
+        return features
+    
+    except Exception as e:
+        print(f"Error loading features from {features_file}: {e}")
+        return None
+
+def find_tuned_models(task):
+    """
+    Find all tuned models for a specific task.
+    
+    Args:
+        task (str): Task name
+    
+    Returns:
+        list: List of (model_name, model_file) tuples
+    """
+    # Get the task directory
+    task_dir = MODELS_DIR / task
+    
+    # Check if the directory exists
+    if not task_dir.exists():
+        print(f"Task directory not found: {task_dir}")
+        return []
+    
+    # Find all tuned model files
+    model_files = list(task_dir.glob("*_tuned_*.joblib"))
+    
+    if not model_files:
+        print(f"No tuned models found in {task_dir}")
+        return []
+    
+    # Extract model names and file paths
+    models = []
+    for model_file in model_files:
+        # Extract the model name (e.g., random_forest, xgboost, etc.)
+        model_name = model_file.name.split("_tuned_")[0]
+        models.append((model_name, model_file))
+    
+    return models
+
+def evaluate_model(model, X_test, y_test):
+    """
+    Evaluate a trained model on test data.
+    
+    Args:
+        model (object): Trained model
+        X_test (pd.DataFrame): Test features
+        y_test (pd.Series): Test labels
+    
+    Returns:
+        dict: Dictionary of evaluation metrics
+    """
+    # Make predictions
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)[:, 1]
+    
+    # Calculate metrics
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    roc_auc = roc_auc_score(y_test, y_prob)
+    cm = confusion_matrix(y_test, y_pred)
+    
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "roc_auc": roc_auc,
+        "confusion_matrix": cm.tolist()
+    }
+
+def main():
+    """Main function to evaluate all models."""
+    # Define the task
+    task = "rem_detection"
+    
+    # Load features
+    features = load_features(task)
+    
+    if features is None:
+        return 1
+    
+    # Extract test data
+    X_test = features["X_test"]
+    y_test = features["y_test"]
+    
+    # Find all tuned models
+    models = find_tuned_models(task)
+    
+    if not models:
+        return 1
+    
+    # Evaluate each model
+    results = []
+    
+    for model_name, model_file in models:
+        try:
+            # Load the model
+            model = joblib.load(model_file)
+            print(f"Loaded model {model_name} from {model_file}")
+            
+            # Evaluate the model
+            metrics = evaluate_model(model, X_test, y_test)
+            
+            # Add model name and file
+            metrics["model_name"] = model_name
+            metrics["model_file"] = str(model_file)
+            
+            results.append(metrics)
+        
+        except Exception as e:
+            print(f"Error evaluating model {model_name}: {e}")
+    
+    # Create a DataFrame from the results
+    df = pd.DataFrame(results)
+    
+    # Sort by F1 score (descending)
+    df = df.sort_values(by="f1", ascending=False)
+    
+    # Print the sorted results
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', 1000)
+    
+    print("\n=== Model Comparison Results ===\n")
+    print(df[["model_name", "accuracy", "precision", "recall", "f1", "roc_auc"]].to_string(index=False))
+    
+    # Print the best model
+    best_model = df.iloc[0]
+    
+    print("\n=== Best Model ===\n")
+    print(f"Model Name: {best_model['model_name']}")
+    print(f"Model File: {best_model['model_file']}")
+    print(f"Accuracy:   {best_model['accuracy']:.4f}")
+    print(f"Precision:  {best_model['precision']:.4f}")
+    print(f"Recall:     {best_model['recall']:.4f}")
+    print(f"F1 Score:   {best_model['f1']:.4f}")
+    print(f"ROC AUC:    {best_model['roc_auc']:.4f}")
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main()) 

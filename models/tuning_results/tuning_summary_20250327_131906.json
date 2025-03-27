@@ -1,0 +1,26 @@
+{
+  "tasks": {
+    "rem_detection": {
+      "models": {
+        "random_forest": {
+          "before": {
+            "f1": 0.9319371727748691,
+            "accuracy": 0.935
+          },
+          "after": {
+            "f1": 0.9071618037135278,
+            "accuracy": 0.9125
+          },
+          "improvement": {
+            "f1_percent": -2.658480612761899,
+            "accuracy_percent": -2.406417112299473
+          },
+          "duration": 10.22884202003479
+        }
+      }
+    }
+  },
+  "total_tuning_time": 10.228984832763672,
+  "started_at": "2025-03-27T13:18:55.799882",
+  "completed_at": "2025-03-27T13:19:06.028872"
+}
