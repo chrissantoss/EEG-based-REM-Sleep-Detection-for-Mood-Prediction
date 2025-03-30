@@ -1,0 +1,298 @@
+# EEG-based REM Sleep Detection for Mood Prediction
+
+This project analyzes EEG data to detect REM sleep patterns and predict mood upon waking. It implements various machine learning models to establish relationships between sleep quality metrics and emotional states.
+
+## IMPORTANT NOTE: REAL DATA USAGE
+
+**This project MUST use real sleep and mood data for all mood prediction tasks, NOT synthetic data.**
+
+* All mood prediction models should be trained and evaluated using the real datasets:
+  * `data/processed/sleep_efficiency_research_based.csv` 
+* The file `create_mock_data.py` should NOT be used for mood prediction
+* The `generate_synthetic_data()` function in `enhanced_mood_prediction.py` should NOT be used
+
+The project has been updated to ensure that:
+1. `enhanced_mood_prediction.py` now uses real data for training and comparison
+2. `test_all_models.py` now uses real data for evaluating mood prediction models
+3. All mood prediction models are trained and validated with real participant data
+
+## Project Overview
+
+Sleep quality, particularly during REM phases, has significant impacts on mood and cognitive function. This project:
+
+1. Processes raw EEG data from public datasets
+2. Extracts time and frequency domain features
+3. Implements multiple ML models to detect REM sleep patterns
+4. Predicts waking mood based on sleep quality metrics
+5. Provides visualization tools for sleep pattern analysis
+
+## Data Resources
+
+### Datasets Used
+
+This project uses the following datasets for training and evaluation:
+
+1. **Sleep-EDF Database** (PhysioNet):
+   - Contains whole-night polysomnographic sleep recordings
+   - Includes EEG, EOG, chin EMG, and event markers
+   - [Access on PhysioNet](https://physionet.org/content/sleep-edfx/1.0.0/)
+
+2. **Sleep-Cassette Study** (PhysioNet):
+   - Contains 153 whole-night PolySomnoGraphic sleep recordings
+   - Includes EEG recordings with sleep stage annotations
+   - [Access on PhysioNet](https://physionet.org/content/sleep-edfx/1.0.0/)
+
+
+### Accessing the Data
+
+#### Option 1: Download from Source
+
+1. Run the provided data download script:
+   ```bash
+   python src/data/download_datasets.py
+   ```
+   This script will download the Sleep-EDF and Sleep-Cassette datasets from PhysioNet.
+
+2. For the Sleep-Mood dataset, use:
+   ```bash
+   python src/data/download_sleep_mood_data.py
+   ```
+
+#### Option 2: Use Pre-packaged Data (Recommended for Quick Start)
+
+The processed data files are already included in the repository:
+- `data/processed/sleep_efficiency_research_based.csv`: Pre-processed sleep efficiency data with mood labels
+
+This data is ready to use with the models and doesn't require additional processing.
+
+### Data Structure
+
+#### sleep_efficiency_research_based.csv
+- **Records**: 454 sleep sessions
+- **Features**: 
+  - `total_sleep_time` (minutes)
+  - `wake_time` (minutes)
+  - `rem_time` (minutes)
+  - `light_sleep_time` (minutes)
+  - `deep_sleep_time` (minutes)
+  - `sleep_efficiency` (percentage)
+  - `rem_percentage` (percentage)
+  - `good_mood` (binary: 0=negative, 1=positive)
+
+
+### Processing Raw Data
+
+If you need to process the raw EEG data from scratch:
+
+```bash
+# Process the raw EEG data from Sleep-EDF and Sleep-Cassette
+python run_pipeline.py pipeline --steps process --datasets sleep-edf,sleep-cassette
+
+# Extract features from processed data
+python run_pipeline.py pipeline --steps extract --task all
+```
+
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.9+
+- pip (Python package manager)
+
+### Installation
+
+1. Clone this repository:
+```bash
+git clone https://github.com/yourusername/eeg-rem-sleep-detection.git
+cd eeg-rem-sleep-detection
+```
+
+2. Create and activate a virtual environment (recommended):
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. **Access the Data**:
+   See the [Data Resources](#data-resources) section above for details on accessing and processing the datasets required for this project.
+
+## Project Structure
+
+```
+eeg-rem-sleep-detection/
+├── data/                      # Data directory
+│   ├── raw/                   # Raw EEG datasets
+│   ├── processed/             # Processed datasets
+│   └── features/              # Extracted features
+├── models/                    # Trained models
+│   ├── rem_detection/         # REM detection models
+│   ├── mood_prediction/       # Mood prediction models
+│   └── tuning_results/        # Hyperparameter tuning results
+├── notebooks/                 # Jupyter notebooks for exploration and visualization
+├── src/                       # Source code
+│   ├── data/                  # Data processing scripts
+│   ├── features/              # Feature extraction
+│   ├── models/                # ML models implementation
+│   ├── visualization/         # Visualization tools
+│   └── utils/                 # Utility functions
+├── tests/                     # Unit tests
+├── visualizations/            # Generated visualizations
+│   └── tuning_results/        # Hyperparameter tuning visualizations
+├── requirements.txt           # Project dependencies
+└── README.md                  # Project documentation
+```
+
+## Usage
+
+### Running the Pipeline
+
+The project provides a unified command-line interface for running different components:
+
+```bash
+python run_pipeline.py [command] [options]
+```
+
+Available commands:
+- `pipeline`: Run the standard data processing and model training pipeline
+- `tune`: Run hyperparameter tuning for models
+- `visualize`: Visualize hyperparameter tuning results
+
+### Data Processing
+
+```bash
+python run_pipeline.py pipeline --steps process
+```
+
+### Feature Extraction
+
+```bash
+python run_pipeline.py pipeline --steps extract
+```
+
+### Model Training
+
+```bash
+python run_pipeline.py pipeline --steps train --model [model_name]
+```
+Available models: logistic_regression, svm, random_forest, xgboost
+
+### Mood Prediction
+
+```bash
+python src/models/predict_mood.py --input [eeg_data_file]
+```
+
+### Visualization
+
+```bash
+python run_pipeline.py pipeline --steps visualize
+```
+
+## Hyperparameter Tuning
+
+The project includes a comprehensive hyperparameter tuning system that helps optimize model performance and tracks results.
+
+### Running Hyperparameter Tuning
+
+```bash
+python run_pipeline.py tune [options]
+```
+
+Options:
+- `--task`: Task to tune models for (`rem_detection`, `mood_prediction`, or `all`)
+- `--model`: Model to tune (`logistic_regression`, `svm`, `random_forest`, `xgboost`, or `all`)
+- `--n_iter`: Number of parameter settings to sample (default: 50)
+- `--cv`: Number of cross-validation folds (default: 5)
+- `--scoring`: Scoring metric for hyperparameter tuning (`accuracy`, `precision`, `recall`, `f1`, or `roc_auc`)
+
+Examples:
+
+```bash
+# Tune all models for all tasks with default settings
+python run_pipeline.py tune
+
+# Tune only the random forest model for REM detection with 100 iterations
+python run_pipeline.py tune --task rem_detection --model random_forest --n_iter 100
+```
+
+### Visualizing Tuning Results
+
+```bash
+python run_pipeline.py visualize [options]
+```
+
+Options:
+- `--task`: Filter by task name
+- `--model`: Filter by model name
+- `--output-dir`: Directory to save visualizations
+
+The visualization script generates:
+1. Metric comparison charts (before vs. after tuning)
+2. Improvement heatmaps
+3. Parameter importance visualizations
+4. Comprehensive HTML reports
+
+For more details, see the [Hyperparameter Tuning README](models/tuning_results/README.md).
+
+## Example Workflow for Presentation
+
+Here's a recommended workflow to reproduce key results for your project presentation:
+
+1. **Setup the environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+2. **Explore the data**:
+   ```bash
+   # View the sleep efficiency dataset
+   python -c "import pandas as pd; print(pd.read_csv('data/processed/sleep_efficiency_research_based.csv').head())"
+   ```
+
+3. **Run feature analysis**:
+   ```bash
+   python analyze_sleep_features.py
+   ```
+
+4. **Compare all models**:
+   ```bash
+   python test_all_models.py
+   ```
+
+5. **Generate visualizations for slides**:
+   ```bash
+   python run_pipeline.py visualize --task mood_prediction
+   ```
+
+## Testing
+
+Run the test suite:
+
+```bash
+pytest tests/
+```
+
+## Contributors
+
+Group 25: Siraj Khanna, Seung-woo Kim, David McGuire, Luca Perrone, Chris Santos
+
+## License
+
+MIT
+
+## Important Update: Synthetic Data Removal
+
+All code related to synthetic data generation has been removed from this project to ensure compliance with the requirement to use only real data:
+
+1. The `generate_synthetic_data()` function has been removed from `enhanced_mood_prediction.py`
+2. The entire `create_mock_data.py` file has been deleted
+3. The `generate_synthetic_dataset()` function has been removed from `src/data/download_datasets.py`
+
+This ensures that only real sleep and mood data from legitimate datasets is used for all model training, evaluation, and predictions.

@@ -140,9 +140,25 @@ def create_comparison_dataframe(results):
     # Create DataFrame
     df = pd.DataFrame(data)
     
-    # Convert timestamp to datetime
+    # Convert timestamp to datetime safely
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        # Filter out non-valid timestamps first
+        timestamp_pattern = r'\d{8}_\d{6}'
+        valid_timestamp_mask = df["timestamp"].str.match(timestamp_pattern, na=False)
+        
+        # Only convert valid timestamps
+        if valid_timestamp_mask.any():
+            # Create a copy of the column to avoid SettingWithCopyWarning
+            timestamps = df.loc[valid_timestamp_mask, "timestamp"].copy()
+            # Convert with a custom parser
+            try:
+                df.loc[valid_timestamp_mask, "timestamp"] = pd.to_datetime(
+                    timestamps, 
+                    format="%Y%m%d_%H%M%S", 
+                    errors="coerce"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to parse timestamps: {e}")
     
     return df
 

@@ -1,0 +1,292 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Hyperparameter Tuning Report</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1, h2, h3 { color: #2c3e50; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .improvement-positive { color: green; }
+            .improvement-negative { color: red; }
+            .summary { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <h1>Hyperparameter Tuning Report</h1>
+        <p>Generated on: 2025-03-30 16:02:31</p>
+        
+        <div class="summary">
+            <h2>Summary</h2>
+            <p>Total tuning runs: 12</p>
+            <p>Models tuned: unknown, random_forest, xgboost</p>
+            <p>Tasks: tuning_results, rem_detection, mood_prediction</p>
+        </div>
+        
+        <h2>Performance Comparison</h2>
+    <table border="1" class="dataframe table table-striped">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Task</th>
+      <th>Model</th>
+      <th>F1 (Before)</th>
+      <th>F1 (After)</th>
+      <th>F1 Improvement</th>
+      <th>Accuracy (Before)</th>
+      <th>Accuracy (After)</th>
+      <th>Precision (Before)</th>
+      <th>Precision (After)</th>
+      <th>Recall (Before)</th>
+      <th>Recall (After)</th>
+      <th>Tuning Time</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>mood_prediction</td>
+      <td>xgboost</td>
+      <td>0.8444</td>
+      <td>0.8235</td>
+      <td>0.00%</td>
+      <td>0.9231</td>
+      <td>0.9011</td>
+      <td>0.8261</td>
+      <td>0.7241</td>
+      <td>0.8636</td>
+      <td>0.9545</td>
+      <td>4.9s</td>
+    </tr>
+    <tr>
+      <td>rem_detection</td>
+      <td>random_forest</td>
+      <td>0.9319</td>
+      <td>0.9072</td>
+      <td>0.00%</td>
+      <td>0.9350</td>
+      <td>0.9125</td>
+      <td>0.9368</td>
+      <td>0.9243</td>
+      <td>0.9271</td>
+      <td>0.8906</td>
+      <td>9.9s</td>
+    </tr>
+    <tr>
+      <td>rem_detection</td>
+      <td>xgboost</td>
+      <td>0.9275</td>
+      <td>0.9156</td>
+      <td>0.00%</td>
+      <td>0.9300</td>
+      <td>0.9175</td>
+      <td>0.9227</td>
+      <td>0.8995</td>
+      <td>0.9323</td>
+      <td>0.9323</td>
+      <td>2.7s</td>
+    </tr>
+    <tr>
+      <td>tuning_results</td>
+      <td>unknown</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.00%</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0s</td>
+    </tr>
+  </tbody>
+</table>
+        <h2>Best Parameters</h2>
+    
+                <h3>random_forest - rem_detection</h3>
+                <table>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                    </tr>
+            
+                    <tr>
+                        <td>bootstrap</td>
+                        <td>True</td>
+                    </tr>
+                
+                    <tr>
+                        <td>class_weight</td>
+                        <td>None</td>
+                    </tr>
+                
+                    <tr>
+                        <td>criterion</td>
+                        <td>entropy</td>
+                    </tr>
+                
+                    <tr>
+                        <td>max_depth</td>
+                        <td>40</td>
+                    </tr>
+                
+                    <tr>
+                        <td>max_features</td>
+                        <td>0.3</td>
+                    </tr>
+                
+                    <tr>
+                        <td>min_impurity_decrease</td>
+                        <td>0.0</td>
+                    </tr>
+                
+                    <tr>
+                        <td>min_samples_leaf</td>
+                        <td>1</td>
+                    </tr>
+                
+                    <tr>
+                        <td>min_samples_split</td>
+                        <td>10</td>
+                    </tr>
+                
+                    <tr>
+                        <td>n_estimators</td>
+                        <td>221</td>
+                    </tr>
+                
+                    <tr>
+                        <td>oob_score</td>
+                        <td>True</td>
+                    </tr>
+                
+                </table>
+            
+                <h3>xgboost - rem_detection</h3>
+                <table>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                    </tr>
+            
+                    <tr>
+                        <td>subsample</td>
+                        <td>0.9</td>
+                    </tr>
+                
+                    <tr>
+                        <td>scale_pos_weight</td>
+                        <td>3</td>
+                    </tr>
+                
+                    <tr>
+                        <td>reg_lambda</td>
+                        <td>1.0</td>
+                    </tr>
+                
+                    <tr>
+                        <td>reg_alpha</td>
+                        <td>0</td>
+                    </tr>
+                
+                    <tr>
+                        <td>n_estimators</td>
+                        <td>300</td>
+                    </tr>
+                
+                    <tr>
+                        <td>min_child_weight</td>
+                        <td>5</td>
+                    </tr>
+                
+                    <tr>
+                        <td>max_depth</td>
+                        <td>5</td>
+                    </tr>
+                
+                    <tr>
+                        <td>learning_rate</td>
+                        <td>0.1</td>
+                    </tr>
+                
+                    <tr>
+                        <td>gamma</td>
+                        <td>0.2</td>
+                    </tr>
+                
+                    <tr>
+                        <td>colsample_bytree</td>
+                        <td>0.8</td>
+                    </tr>
+                
+                </table>
+            
+                <h3>xgboost - mood_prediction</h3>
+                <table>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                    </tr>
+            
+                    <tr>
+                        <td>subsample</td>
+                        <td>0.9</td>
+                    </tr>
+                
+                    <tr>
+                        <td>scale_pos_weight</td>
+                        <td>7</td>
+                    </tr>
+                
+                    <tr>
+                        <td>reg_lambda</td>
+                        <td>5.0</td>
+                    </tr>
+                
+                    <tr>
+                        <td>reg_alpha</td>
+                        <td>0.01</td>
+                    </tr>
+                
+                    <tr>
+                        <td>n_estimators</td>
+                        <td>700</td>
+                    </tr>
+                
+                    <tr>
+                        <td>min_child_weight</td>
+                        <td>5</td>
+                    </tr>
+                
+                    <tr>
+                        <td>max_depth</td>
+                        <td>4</td>
+                    </tr>
+                
+                    <tr>
+                        <td>learning_rate</td>
+                        <td>0.07</td>
+                    </tr>
+                
+                    <tr>
+                        <td>gamma</td>
+                        <td>0.3</td>
+                    </tr>
+                
+                    <tr>
+                        <td>colsample_bytree</td>
+                        <td>0.8</td>
+                    </tr>
+                
+                    <tr>
+                        <td>colsample_bylevel</td>
+                        <td>0.9</td>
+                    </tr>
+                
+                </table>
+            
+    </body>
+    </html>
+    
