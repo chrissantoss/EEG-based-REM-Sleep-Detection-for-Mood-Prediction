@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-This script predicts mood based on sleep quality metrics using the trained model.
-It provides sample sleep quality metrics and predicts the corresponding waking mood.
-"""
+
+# This script predicts mood based on sleep quality metrics using the trained model.
+# It provides sample sleep quality metrics and predicts the corresponding waking mood.
+
 
 import os
 import sys
@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import joblib
 from pathlib import Path
+import argparse
 
 # Setup logging
 logging.basicConfig(
@@ -59,62 +60,6 @@ def load_model(model_name="xgboost", task="mood_prediction"):
     except Exception as e:
         logger.error(f"Error loading model: {e}")
         return None, None
-
-def predict_mood(sleep_metrics, model_name="xgboost"):
-    """
-    Predict mood based on sleep metrics.
-    
-    Args:
-        sleep_metrics (dict): Sleep metrics
-        model_name (str): Name of the model to use
-    
-    Returns:
-        dict: Mood prediction results
-    """
-    # Load mood prediction model
-    model, metadata = load_model(model_name, "mood_prediction")
-    
-    if model is None or metadata is None:
-        return None
-    
-    try:
-        # Convert metrics to DataFrame
-        metrics_df = pd.DataFrame([sleep_metrics])
-        
-        # Get selected features
-        selected_features = metadata.get("selected_features", [])
-        
-        if selected_features:
-            # Check if all required features are present
-            missing_features = [f for f in selected_features if f not in metrics_df.columns]
-            
-            if missing_features:
-                logger.error(f"Missing features for mood prediction: {missing_features}")
-                return None
-            
-            # Select features used by the model
-            X = metrics_df[selected_features]
-        else:
-            # If no selected features in metadata, use all features
-            X = metrics_df
-        
-        # Make predictions
-        mood_pred = model.predict(X)[0]
-        mood_prob = model.predict_proba(X)[0, 1]
-        
-        # Create result dictionary
-        result = {
-            'good_mood': bool(mood_pred),
-            'good_mood_probability': mood_prob,
-            'mood_score': mood_prob * 10.0  # Scale to 0-10
-        }
-        
-        logger.info(f"Mood prediction: {result}")
-        return result
-    
-    except Exception as e:
-        logger.error(f"Error predicting mood: {e}")
-        return None
 
 def generate_sample_sleep_metrics():
     """
@@ -197,15 +142,210 @@ def generate_sample_sleep_metrics():
     
     return samples
 
+def create_derived_features(metrics_df):
+    """
+    Create advanced derived features needed by robust models.
+    
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing sleep metrics
+        
+    Returns:
+        pd.DataFrame: DataFrame with added derived features
+    """
+    logger.info("Creating derived features for robust models")
+    X_enhanced = metrics_df.copy()
+    
+    # Check if required columns exist
+    required_columns = ['total_sleep_time', 'rem_time', 'deep_sleep_time', 
+                        'light_sleep_time', 'wake_time', 'sleep_efficiency']
+    
+    missing_columns = [col for col in required_columns if col not in metrics_df.columns]
+    if missing_columns:
+        logger.warning(f"Required columns {missing_columns} not found, skipping derived features")
+        return metrics_df
+    
+    try:
+        # Create sleep continuity metric (ratio of wake time to total sleep time)
+        # Add epsilon (0.001) to denominator to avoid division by zero
+        X_enhanced['sleep_continuity'] = 1 - (X_enhanced['wake_time'] / (X_enhanced['total_sleep_time'] + 0.001))
+        # Clip to reasonable range [0, 1]
+        X_enhanced['sleep_continuity'] = X_enhanced['sleep_continuity'].clip(0, 1)
+        
+        # Create sleep depth ratio (deep sleep to light sleep ratio)
+        # Add epsilon to denominator to avoid division by zero
+        X_enhanced['sleep_depth_ratio'] = X_enhanced['deep_sleep_time'] / (X_enhanced['light_sleep_time'] + 0.001)
+        # Clip to reasonable range [0, 3] - typical range is 0.1 to 1.5
+        X_enhanced['sleep_depth_ratio'] = X_enhanced['sleep_depth_ratio'].clip(0, 3)
+        
+        # Create recovery ratio (deep sleep to wake time ratio)
+        # Add 1 to denominator to avoid division by zero and extreme values
+        X_enhanced['recovery_ratio'] = X_enhanced['deep_sleep_time'] / (X_enhanced['wake_time'] + 1)
+        # Clip to reasonable range [0, 10] - typical range is 0.5 to 5
+        X_enhanced['recovery_ratio'] = X_enhanced['recovery_ratio'].clip(0, 10)
+        
+        # Create composite sleep score
+        # Handle potential division by zero in percentages
+        total_sleep_with_epsilon = X_enhanced['total_sleep_time'] + 0.001
+        
+        X_enhanced['composite_sleep_score'] = (
+            (X_enhanced['sleep_efficiency'] / 100 * 0.35) +  # 35% weight to efficiency
+            (X_enhanced['rem_time'] / total_sleep_with_epsilon * 0.3) +  # 30% weight to REM
+            (X_enhanced['deep_sleep_time'] / total_sleep_with_epsilon * 0.25) +  # 25% weight to deep sleep
+            (X_enhanced['sleep_continuity'] * 0.1)  # 10% weight to continuity
+        )
+        # Clip to reasonable range [0, 1]
+        X_enhanced['composite_sleep_score'] = X_enhanced['composite_sleep_score'].clip(0, 1)
+        
+        # Create sleep quality index
+        X_enhanced['sleep_quality_index'] = (
+            X_enhanced['sleep_depth_ratio'] * 0.4 +
+            X_enhanced['recovery_ratio'] * 0.3 +
+            X_enhanced['sleep_continuity'] * 0.3
+        )
+        # Clip to reasonable range [0, 2]
+        X_enhanced['sleep_quality_index'] = X_enhanced['sleep_quality_index'].clip(0, 2)
+        
+        # Add default values for the advanced features expected by robust models
+        if 'stress_level' not in X_enhanced.columns:
+            X_enhanced['stress_level'] = 5  # Default moderate stress level (range 0-10)
+            
+        if 'exercise_minutes' not in X_enhanced.columns:
+            X_enhanced['exercise_minutes'] = 30  # Default moderate exercise (30 minutes)
+            
+        if 'caffeine_mg' not in X_enhanced.columns:
+            X_enhanced['caffeine_mg'] = 100  # Default moderate caffeine (equivalent to ~1 cup of coffee)
+            
+        if 'alcohol_units' not in X_enhanced.columns:
+            X_enhanced['alcohol_units'] = 0  # Default no alcohol
+            
+        # Calculate stress-exercise balance
+        if 'stress_level' in X_enhanced.columns and 'exercise_minutes' in X_enhanced.columns:
+            X_enhanced['stress_exercise_balance'] = X_enhanced['exercise_minutes'] / (X_enhanced['stress_level'] * 10 + 0.001)
+            X_enhanced['stress_exercise_balance'] = X_enhanced['stress_exercise_balance'].clip(0, 5)
+            
+        logger.info("Created derived features for robust model prediction")
+        logger.info(f"Added features: {set(X_enhanced.columns) - set(metrics_df.columns)}")
+        
+        return X_enhanced
+        
+    except Exception as e:
+        logger.error(f"Error creating derived features: {e}")
+        logger.error("Returning original features without derivation")
+        return metrics_df
+
+def predict_mood(sleep_metrics, model_name="xgboost"):
+    """
+    Predict mood based on sleep metrics.
+    
+    Args:
+        sleep_metrics (dict): Sleep metrics
+        model_name (str): Name of the model to use
+    
+    Returns:
+        dict: Mood prediction results
+    """
+    # Load mood prediction model
+    model, metadata = load_model(model_name, "mood_prediction")
+    
+    if model is None or metadata is None:
+        return None
+    
+    try:
+        # Convert metrics to DataFrame
+        metrics_df = pd.DataFrame([sleep_metrics])
+        
+        # Add derived features for robust models
+        if "robust" in model_name:
+            metrics_df = create_derived_features(metrics_df)
+        
+        # Get selected features from metadata
+        if "features" in metadata:
+            selected_features = metadata["features"]
+        else:
+            selected_features = metadata.get("selected_features", [])
+        
+        if selected_features:
+            # Check if all required features are present
+            missing_features = [f for f in selected_features if f not in metrics_df.columns]
+            
+            if missing_features:
+                logger.error(f"Missing features for {model_name}: {missing_features}")
+                return None
+            
+            # Select features used by the model
+            X = metrics_df[selected_features]
+        else:
+            # If no selected features in metadata, use all features
+            X = metrics_df
+        
+        # Make predictions
+        mood_pred = model.predict(X)[0]
+        mood_prob = model.predict_proba(X)[0, 1]
+        
+        # Create result dictionary
+        result = {
+            'good_mood': bool(mood_pred),
+            'good_mood_probability': mood_prob,
+            'mood_score': mood_prob * 10.0  # Scale to 0-10
+        }
+        
+        logger.info(f"Mood prediction: {result}")
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error predicting mood: {e}")
+        return None
+
 def main():
     """Main function to predict mood from sleep metrics."""
-    logger.info("Predicting mood based on different sleep metrics scenarios")
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Predict mood based on sleep metrics")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="xgboost",
+        choices=[
+            "xgboost", "random_forest", "svm", "logistic_regression", 
+            "xgboost_robust", "random_forest_robust"
+        ],
+        help="Model to use for prediction (default: xgboost)"
+    )
+    parser.add_argument(
+        "--scenario",
+        type=int,
+        default=0,
+        help="Specific scenario to test (0 for all scenarios, 1-5 for individual scenarios)"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output"
+    )
+    args = parser.parse_args()
+    
+    logger.info(f"Predicting mood using the {args.model} model")
     
     # Generate sample sleep metrics
     sample_metrics = generate_sample_sleep_metrics()
     
+    # Filter scenarios if specified
+    if args.scenario > 0 and args.scenario <= len(sample_metrics):
+        sample_metrics = [sample_metrics[args.scenario - 1]]
+        logger.info(f"Testing only scenario {args.scenario}")
+    
     # Predict mood for each sample
-    models = ["xgboost", "random_forest", "svm", "logistic_regression"]
+    if args.scenario == 0:
+        # If testing all scenarios, use the specified model
+        models = [args.model]
+    else:
+        # If testing a specific scenario, use all models for comparison
+        if args.verbose:
+            models = [
+                "xgboost", "random_forest", "svm", "logistic_regression", 
+                "xgboost_robust", "random_forest_robust"
+            ]
+        else:
+            models = [args.model]
     
     for i, metrics in enumerate(sample_metrics):
         logger.info(f"\nScenario {i+1}:")
@@ -224,6 +364,56 @@ def main():
                 logger.info(f"  Mood Score (0-10): {result['mood_score']:.1f}")
             else:
                 logger.info(f"  Failed to predict mood using {model_name}")
+                
+                # If this is a robust model that failed, try looking in the robust_models directory
+                if "robust" in model_name:
+                    robust_model_path = MODELS_DIR / "robust_models" / f"{model_name}.joblib"
+                    robust_metadata_path = MODELS_DIR / "robust_models" / f"{model_name}_metadata.joblib"
+                    
+                    if robust_model_path.exists() and robust_metadata_path.exists():
+                        logger.info(f"Trying to load robust model from alternate location: {robust_model_path}")
+                        try:
+                            model = joblib.load(robust_model_path)
+                            metadata = joblib.load(robust_metadata_path)
+                            
+                            # Convert metrics to DataFrame
+                            metrics_df = pd.DataFrame([metrics])
+                            
+                            # Get selected features
+                            selected_features = metadata.get("selected_features", [])
+                            
+                            if selected_features:
+                                # Check if all required features are present
+                                missing_features = [f for f in selected_features if f not in metrics_df.columns]
+                                
+                                if missing_features:
+                                    logger.error(f"Missing features for mood prediction: {missing_features}")
+                                    continue
+                                
+                                # Select features used by the model
+                                X = metrics_df[selected_features]
+                            else:
+                                # If no selected features in metadata, use all features
+                                X = metrics_df
+                            
+                            # Make predictions
+                            mood_pred = model.predict(X)[0]
+                            mood_prob = model.predict_proba(X)[0, 1]
+                            
+                            # Create result dictionary
+                            result = {
+                                'good_mood': bool(mood_pred),
+                                'good_mood_probability': mood_prob,
+                                'mood_score': mood_prob * 10.0  # Scale to 0-10
+                            }
+                            
+                            logger.info(f"  Predicted Mood: {'Good' if result['good_mood'] else 'Bad'}")
+                            logger.info(f"  Confidence: {result['good_mood_probability']:.2f}")
+                            logger.info(f"  Mood Score (0-10): {result['mood_score']:.1f}")
+                        except Exception as e:
+                            logger.error(f"Error with robust model from alternate location: {e}")
+                
+    logger.info("\nCompleted mood predictions")
 
 if __name__ == "__main__":
     main() 

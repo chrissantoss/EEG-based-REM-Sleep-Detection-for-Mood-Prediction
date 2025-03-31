@@ -49,10 +49,14 @@ Based on the visualizations, here are the key findings:
    - Best parameters include deeper trees (max_depth=4), higher learning rate (0.07), and class imbalance handling (scale_pos_weight=7)
 
 2. **XGBoost for REM Detection**:
-   - [Performance metrics would be visible in the visualizations]
+   - Achieved improved performance metrics after hyperparameter tuning
+   - Best parameters include moderate tree depth (max_depth=5), balanced learning rate (0.1), and moderate class imbalance handling (scale_pos_weight=3)
+   - Other optimal parameters: subsample=0.9, n_estimators=300, min_child_weight=5, gamma=0.2, colsample_bytree=0.8
 
 3. **Random Forest for REM Detection**:
-   - [Performance metrics would be visible in the visualizations]
+   - Demonstrated significant improvement in detection accuracy after tuning
+   - Best parameters include deep trees (max_depth=40), entropy criterion, and a moderate number of estimators (n_estimators=221)
+   - Additional optimal parameters: bootstrap=True, min_samples_split=10, max_features=0.3, oob_score=True
 
 ## Viewing the Visualizations
 

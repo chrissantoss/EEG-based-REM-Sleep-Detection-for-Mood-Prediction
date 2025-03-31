@@ -102,6 +102,42 @@ def load_models():
             except Exception as e:
                 logger.error(f"Error loading enhanced model {model_name}: {e}")
     
+    # Load robust models (look in both base and robust directories)
+    # First check in base_model_dir for models with "robust" in the name
+    robust_model_files = [f for f in base_model_dir.glob("*robust*.joblib") if "_metadata" not in f.name]
+    
+    # Also check in the robust_models directory if it exists
+    robust_dir = ROOT_DIR / "models" / "robust_models"
+    if robust_dir.exists():
+        robust_model_files.extend([f for f in robust_dir.glob("*.joblib") if "_metadata" not in f.name])
+    
+    for model_file in robust_model_files:
+        if "_metadata" in model_file.name:
+            continue
+            
+        model_name = model_file.stem
+        metadata_file = model_file.parent / f"{model_name}_metadata.joblib"
+        
+        if not metadata_file.exists():
+            logger.warning(f"Metadata file not found for robust model {model_name}")
+            continue
+            
+        try:
+            model = joblib.load(model_file)
+            metadata = joblib.load(metadata_file)
+            
+            models[model_name] = {
+                "model": model,
+                "metadata": metadata,
+                "file_path": str(model_file),
+                "type": "robust"
+            }
+            
+            logger.info(f"Loaded robust model: {model_name}")
+            
+        except Exception as e:
+            logger.error(f"Error loading robust model {model_name}: {e}")
+    
     logger.info(f"Loaded {len(models)} models in total")
     return models
 
