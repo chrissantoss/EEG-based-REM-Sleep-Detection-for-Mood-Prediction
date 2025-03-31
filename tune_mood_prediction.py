@@ -66,31 +66,51 @@ XGBOOST_PARAM_GRID = {
 
 def load_features(task="mood_prediction"):
     """
-    Load extracted features for the mood prediction task.
+    Load preprocessed features for model training and evaluation.
+    
+    Args:
+        task (str): Task name ('mood_prediction' or 'rem_detection')
     
     Returns:
-        dict: Dictionary containing features
+        dict: Dictionary containing X_train, y_train, X_test, y_test, and feature_names
     """
-    # Try to load real data first
-    try:
-        from test_all_models import load_real_mood_data
-        features = load_real_mood_data()
-        if features is not None:
-            logger.info("Successfully loaded real mood data")
-            return features
-    except Exception as e:
-        logger.warning(f"Could not load real mood data: {e}")
+    # Define feature file path
+    feature_file = ROOT_DIR / "data" / "features" / f"{task}_features.joblib"
     
-    # Fall back to features file
-    features_file = FEATURES_DIR / f"{task}_features.joblib"
-    if not features_file.exists():
-        logger.error(f"Features file not found: {features_file}")
+    if not feature_file.exists():
+        logger.error(f"Feature file not found: {feature_file}")
         return None
     
+    # Load features
     try:
-        features = joblib.load(features_file)
-        logger.info(f"Loaded features from {features_file}")
+        features = joblib.load(feature_file)
+        
+        # Make sure we have all the required features
+        required_keys = ["X_train", "y_train", "X_test", "y_test", "feature_names"]
+        missing_keys = [key for key in required_keys if key not in features]
+        
+        if missing_keys:
+            logger.warning(f"Missing keys in features: {missing_keys}")
+            
+            # Try to recreate feature_names if missing
+            if "feature_names" in missing_keys and "X_train" in features:
+                if hasattr(features["X_train"], "columns"):
+                    features["feature_names"] = features["X_train"].columns.tolist()
+                    logger.info(f"Created feature_names from X_train columns")
+                elif isinstance(features["X_train"], np.ndarray):
+                    # Create generic feature names
+                    n_features = features["X_train"].shape[1]
+                    features["feature_names"] = [f"feature_{i}" for i in range(n_features)]
+                    logger.info(f"Created generic feature names for {n_features} features")
+                    
+        # Check data types
+        if isinstance(features["X_train"], np.ndarray) and "feature_names" in features:
+            logger.info(f"X_train is a NumPy array with {features['X_train'].shape[1]} features")
+            logger.info(f"feature_names has {len(features['feature_names'])} entries")
+            
+        logger.info(f"Loaded features from {feature_file}")
         return features
+        
     except Exception as e:
         logger.error(f"Error loading features: {e}")
         return None
@@ -412,21 +432,32 @@ def fine_tune_specific_params(X_train, y_train, X_test, y_test, base_params):
     return best_model, best_params, metrics
 
 def main():
-    """Main function to tune XGBoost hyperparameters for mood prediction."""
+    """Main function to tune hyperparameters for XGBoost model."""
     logger.info("Starting advanced mood prediction hyperparameter tuning")
     
-    # Load features
-    features = load_features()
+    # Load preprocessed features
+    try:
+        from test_all_models import load_real_mood_data
+        X_train, X_test, y_train, y_test, feature_names = load_real_mood_data()
+        logger.info("Loaded real mood data from test_all_models")
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Could not load real mood data: {e}")
+        # Load from features file instead
+        features = load_features("mood_prediction")
+        if features is None:
+            return 1
+        
+        X_train = features["X_train"]
+        X_test = features["X_test"]
+        y_train = features["y_train"]
+        y_test = features["y_test"]
+        feature_names = features["feature_names"]
     
-    if features is None:
-        logger.error("Failed to load features")
-        return 1
-    
-    # Extract training and test data
-    X_train = features["X_train"]
-    y_train = features["y_train"]
-    X_test = features["X_test"]
-    y_test = features["y_test"]
+    # Convert NumPy arrays to pandas DataFrames if needed
+    if isinstance(X_train, np.ndarray):
+        X_train = pd.DataFrame(X_train, columns=feature_names)
+        X_test = pd.DataFrame(X_test, columns=feature_names)
+        logger.info("Converted NumPy arrays to pandas DataFrames")
     
     logger.info(f"Data loaded: {X_train.shape[0]} training samples, {X_test.shape[0]} test samples")
     logger.info(f"Features: {', '.join(X_train.columns)}")

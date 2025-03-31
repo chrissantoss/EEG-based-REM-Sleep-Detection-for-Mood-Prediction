@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-This script implements a personalized mood prediction system 
-that calibrates based on individual sleep patterns.
-"""
+# Implementation of a personalized mood prediction system that calibrates based on individual sleep patterns.
 
 import os
 import sys
@@ -34,16 +31,10 @@ INDIVIDUAL_DIR = ROOT_DIR / "individual_data"
 INDIVIDUAL_DIR.mkdir(parents=True, exist_ok=True)
 
 class PersonalizedMoodPredictor:
-    """Class for personalized mood prediction with calibration."""
+    # Handles personalized mood prediction with calibration based on user data
     
     def __init__(self, user_id, base_model_name="xgboost_refined"):
-        """
-        Initialize the personalized mood predictor.
-        
-        Args:
-            user_id (str): Unique identifier for the user
-            base_model_name (str): Name of the base model to use
-        """
+        # Initialize the personalized mood predictor with user ID and base model
         self.user_id = user_id
         self.base_model_name = base_model_name
         self.user_dir = INDIVIDUAL_DIR / user_id
@@ -64,12 +55,7 @@ class PersonalizedMoodPredictor:
         self.calibration_model = self.load_calibration_model()
     
     def load_base_model(self):
-        """
-        Load the base model for mood prediction.
-        
-        Returns:
-            tuple: (model, metadata) or (None, None) if loading fails
-        """
+        # Loads the base model for mood prediction, returning (model, metadata) or (None, None) if loading fails
         model_path = MODELS_DIR / "mood_prediction" / f"{self.base_model_name}.joblib"
         metadata_path = MODELS_DIR / "mood_prediction" / f"{self.base_model_name}_metadata.joblib"
         
@@ -95,12 +81,7 @@ class PersonalizedMoodPredictor:
             return None, None
     
     def load_personal_data(self):
-        """
-        Load personal sleep and mood data.
-        
-        Returns:
-            pd.DataFrame: DataFrame containing sleep and mood data
-        """
+        # Loads personal sleep and mood data, creating empty DataFrame if none exists
         if not self.sleep_data_path.exists():
             # Create an empty DataFrame
             return pd.DataFrame(columns=[
@@ -121,12 +102,7 @@ class PersonalizedMoodPredictor:
             return pd.DataFrame()
     
     def load_calibration_model(self):
-        """
-        Load the personal calibration model.
-        
-        Returns:
-            object: Calibration model or None if not available
-        """
+        # Loads the personal calibration model if available
         if not self.calibration_path.exists():
             logger.info("No calibration model found")
             return None
@@ -143,19 +119,7 @@ class PersonalizedMoodPredictor:
     def add_sleep_mood_record(self, sleep_metrics, mood_rating, 
                              stress_level=None, exercise_minutes=None, 
                              caffeine_mg=None):
-        """
-        Add a new sleep and mood record to the user's data.
-        
-        Args:
-            sleep_metrics (dict): Sleep metrics
-            mood_rating (float): User's self-reported mood rating (0-10)
-            stress_level (float, optional): Stress level (0-10)
-            exercise_minutes (int, optional): Exercise duration in minutes
-            caffeine_mg (int, optional): Caffeine consumption in mg
-            
-        Returns:
-            bool: True if record was added successfully
-        """
+        # Adds a new sleep and mood record to the user's data and updates calibration if enough data
         try:
             # Create a new record
             record = {
@@ -189,12 +153,7 @@ class PersonalizedMoodPredictor:
             return False
     
     def update_calibration_model(self):
-        """
-        Update the personal calibration model using collected data.
-        
-        Returns:
-            bool: True if model was updated successfully
-        """
+        # Updates the personal calibration model using collected data, needs at least 5 records
         if len(self.personal_data) < 5:
             logger.warning("Not enough data to update calibration model (min 5 records)")
             return False
@@ -248,35 +207,31 @@ class PersonalizedMoodPredictor:
             
             # Evaluate if possible
             if X_test is not None and len(X_test) > 0:
+                # Calculate metrics
                 y_pred = calibration.predict(X_test)
-                accuracy = accuracy_score(y_test, y_pred)
-                f1 = f1_score(y_test, y_pred, zero_division=0)
+                y_prob = calibration.predict_proba(X_test)[:, 1]
                 
-                logger.info(f"Calibration model performance: Accuracy={accuracy:.4f}, F1={f1:.4f}")
+                metrics = {
+                    'accuracy': float(accuracy_score(y_test, y_pred)),
+                    'f1': float(f1_score(y_test, y_pred))
+                }
                 
-                # Store evaluation metrics
-                calibration_data = {
-                    'model': calibration,
-                    'metrics': {
-                        'accuracy': float(accuracy),
-                        'f1': float(f1)
-                    },
-                    'features': list(X.columns),
-                    'updated_at': datetime.now().isoformat()
-                }
-            else:
-                calibration_data = {
-                    'model': calibration,
-                    'metrics': {},
-                    'features': list(X.columns),
-                    'updated_at': datetime.now().isoformat()
-                }
+                logger.info("Calibration model performance:")
+                for metric, value in metrics.items():
+                    logger.info(f"  {metric}: {value:.4f}")
             
             # Save calibration model
+            calibration_data = {
+                'model': calibration,
+                'features': X.columns.tolist(),
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
             joblib.dump(calibration_data, self.calibration_path)
+            logger.info(f"Saved calibration model to {self.calibration_path}")
+            
             self.calibration_model = calibration_data
             
-            logger.info(f"Updated calibration model with {len(X_train)} records")
             return True
         
         except Exception as e:
@@ -284,231 +239,225 @@ class PersonalizedMoodPredictor:
             return False
     
     def predict_mood(self, sleep_metrics, additional_factors=None):
-        """
-        Predict mood based on sleep metrics with personal calibration.
-        
-        Args:
-            sleep_metrics (dict): Sleep metrics
-            additional_factors (dict, optional): Additional factors like stress, exercise, etc.
-            
-        Returns:
-            dict: Prediction results
-        """
-        if self.base_model is None:
-            logger.error("Base model not available")
-            return None
-        
+        # Predicts mood based on sleep metrics and additional factors, applying personal calibration
+        # Returns tuple of (prediction, confidence)
         try:
-            # Combine sleep metrics and additional factors
-            input_data = sleep_metrics.copy()
-            if additional_factors:
-                input_data.update(additional_factors)
+            # Combine metrics and factors
+            features = sleep_metrics.copy()
+            
+            if additional_factors is not None:
+                features.update(additional_factors)
             
             # Convert to DataFrame
-            X = pd.DataFrame([input_data])
+            X = pd.DataFrame([features])
             
-            # Make base prediction
-            if self.base_metadata and 'selected_features' in self.base_metadata:
-                required_features = self.base_metadata['selected_features']
+            # Base prediction
+            base_prediction = None
+            base_confidence = 0.5
+            
+            if self.base_model is not None:
+                # Check if we have all required features
+                if self.base_metadata and 'selected_features' in self.base_metadata:
+                    required_features = self.base_metadata['selected_features']
+                    missing_features = [f for f in required_features if f not in X.columns]
+                    
+                    if missing_features:
+                        logger.warning(f"Missing features for base model: {missing_features}")
+                        # Add missing features with zeros
+                        for feature in missing_features:
+                            X[feature] = 0
+                    
+                    base_X = X[required_features]
+                else:
+                    base_X = X
                 
-                # Filter out additional factors that weren't in the training data
-                base_X_columns = list(set(required_features).intersection(set(X.columns)))
+                # Get base model prediction
+                base_prediction = bool(self.base_model.predict(base_X)[0])
+                base_confidence = float(self.base_model.predict_proba(base_X)[0, 1])
                 
-                # Check if we have all the required features
+                logger.info(f"Base model prediction: {base_prediction} (confidence: {base_confidence:.4f})")
+            
+            # Apply calibration if available
+            if self.calibration_model is not None:
+                calibration = self.calibration_model['model']
+                required_features = self.calibration_model['features']
+                
+                # Prepare features for calibration
+                if 'base_prediction' in required_features and base_prediction is not None:
+                    X['base_prediction'] = int(base_prediction)
+                
+                if 'base_confidence' in required_features and base_prediction is not None:
+                    X['base_confidence'] = base_confidence
+                
+                # Check missing features
                 missing_features = [f for f in required_features if f not in X.columns]
-                
                 if missing_features:
-                    logger.warning(f"Missing features for base model: {missing_features}")
+                    logger.warning(f"Missing features for calibration: {missing_features}")
                     # Add missing features with zeros
                     for feature in missing_features:
                         X[feature] = 0
                 
-                # Remove additional features that weren't in the training data
-                extra_features = [f for f in X.columns if f not in required_features]
-                if extra_features:
-                    logger.warning(f"Removing extra features not used in base model: {extra_features}")
+                # Select required features
+                X_cal = X[required_features]
                 
-                base_X = X[required_features]
-            else:
-                # Use all common sleep metrics
-                sleep_features = [
-                    'total_sleep_time', 'wake_time', 'rem_time', 
-                    'light_sleep_time', 'deep_sleep_time', 'sleep_efficiency', 
-                    'rem_percentage', 'rem_cycles', 'rem_awakenings'
-                ]
-                # Keep only features that exist in both X and sleep_features
-                base_features = [f for f in sleep_features if f in X.columns]
-                base_X = X[base_features]
+                # Get calibrated prediction
+                calibrated_prediction = bool(calibration.predict(X_cal)[0])
+                calibrated_confidence = float(calibration.predict_proba(X_cal)[0, 1])
                 
-                # Add missing features
-                missing_features = [f for f in sleep_features if f not in X.columns]
-                if missing_features:
-                    logger.warning(f"Missing sleep features: {missing_features}")
-                    for feature in missing_features:
-                        base_X[feature] = 0
+                logger.info(f"Calibrated prediction: {calibrated_prediction} (confidence: {calibrated_confidence:.4f})")
+                
+                return calibrated_prediction, calibrated_confidence
             
-            base_prediction = bool(self.base_model.predict(base_X)[0])
-            base_probability = float(self.base_model.predict_proba(base_X)[0, 1])
-            
-            # Use calibration model if available
-            if self.calibration_model and len(self.personal_data) >= 5:
-                # Add base model predictions
-                X['base_prediction'] = 1 if base_prediction else 0
-                X['base_confidence'] = base_probability
-                
-                # Get required features for calibration
-                calibration_features = self.calibration_model['features']
-                missing_features = [f for f in calibration_features if f not in X.columns]
-                
-                if missing_features:
-                    # Add missing features with zeros
-                    for feature in missing_features:
-                        X[feature] = 0
-                
-                # Select features
-                X_calib = X[calibration_features]
-                
-                # Make calibrated prediction
-                calibration_model = self.calibration_model['model']
-                calibrated_prediction = bool(calibration_model.predict(X_calib)[0])
-                calibrated_probability = float(calibration_model.predict_proba(X_calib)[0, 1])
-                
-                # Create result
-                result = {
-                    'base_prediction': {
-                        'good_mood': base_prediction,
-                        'probability': base_probability,
-                        'mood_score': base_probability * 10
-                    },
-                    'calibrated_prediction': {
-                        'good_mood': calibrated_prediction,
-                        'probability': calibrated_probability,
-                        'mood_score': calibrated_probability * 10
-                    },
-                    'has_personalization': True,
-                    'confidence': 'high' if len(self.personal_data) >= 10 else 'medium'
-                }
-            else:
-                # Just use the base model prediction
-                result = {
-                    'good_mood': base_prediction,
-                    'probability': base_probability,
-                    'mood_score': base_probability * 10,
-                    'has_personalization': False,
-                    'confidence': 'medium'
-                }
-            
-            logger.info(f"Mood prediction: {result}")
-            return result
+            # Fallback to base prediction
+            return base_prediction, base_confidence
         
         except Exception as e:
             logger.error(f"Error predicting mood: {e}")
-            return None
+            return None, 0.0
 
 def simulate_personalization():
-    """
-    Simulate personalized prediction for a test user.
-    """
-    # Create a test user
-    user_id = "test_user_001"
+    # Simulates personalization process with synthetic data to demonstrate calibration
+    logger.info("Simulating personalization process...")
+    
+    # Create a sample user
+    user_id = f"sim_user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
     predictor = PersonalizedMoodPredictor(user_id)
     
-    # Generate sleep data for 10 days
-    # Hypothetical patterns: better sleep → better mood
-    for i in range(10):
-        # Alternate between good and bad sleep
-        is_good_sleep = (i % 2 == 0)
+    # Generate some synthetic data - imagine this user has better mood with less sleep
+    # than the average population
+    np.random.seed(42)
+    
+    # Let's generate 20 days of data
+    for i in range(20):
+        # Generate sleep metrics
+        sleep_time = np.random.normal(6.5, 0.5)  # Mean sleep time of 6.5 hours
+        rem_time = sleep_time * np.random.normal(0.25, 0.05)  # About 25% REM
+        deep_time = sleep_time * np.random.normal(0.20, 0.05)  # About 20% deep sleep
+        light_time = sleep_time - rem_time - deep_time
         
-        if is_good_sleep:
-            # Good sleep pattern
-            sleep_metrics = {
-                'total_sleep_time': np.random.randint(440, 500),  # 7.3-8.3 hours
-                'wake_time': np.random.randint(10, 30),
-                'rem_time': np.random.randint(100, 130),
-                'light_sleep_time': np.random.randint(230, 260),
-                'deep_sleep_time': np.random.randint(100, 130),
-                'sleep_efficiency': np.random.randint(92, 98),
-                'rem_percentage': np.random.randint(22, 28),
-                'rem_cycles': 4,
-                'rem_awakenings': np.random.randint(0, 3)
-            }
-            # Good mood (with some randomness)
-            mood_rating = min(10, max(0, np.random.normal(8.5, 1.0)))
-        else:
-            # Poor sleep pattern
-            sleep_metrics = {
-                'total_sleep_time': np.random.randint(300, 390),  # 5-6.5 hours
-                'wake_time': np.random.randint(40, 90),
-                'rem_time': np.random.randint(30, 60),
-                'light_sleep_time': np.random.randint(180, 230),
-                'deep_sleep_time': np.random.randint(50, 90),
-                'sleep_efficiency': np.random.randint(70, 85),
-                'rem_percentage': np.random.randint(10, 18),
-                'rem_cycles': np.random.randint(2, 4),
-                'rem_awakenings': np.random.randint(3, 8)
-            }
-            # Poor mood (with some randomness)
-            mood_rating = min(10, max(0, np.random.normal(4.5, 1.5)))
+        wake_time = np.random.normal(20, 10)  # Minutes awake during the night
+        rem_cycles = np.random.normal(4, 1)  # Number of REM cycles
+        rem_awakenings = np.random.normal(2, 1)  # Number of awakenings from REM
         
-        # Add additional factors
-        additional_factors = {
-            'stress_level': np.random.randint(1, 10),
-            'exercise_minutes': np.random.randint(0, 60),
-            'caffeine_mg': np.random.randint(0, 300)
+        # For this user, shorter sleep actually leads to better mood (unusual)
+        base_mood = 10 - sleep_time  # Invert the normal relationship
+        
+        # Add some noise
+        mood_with_noise = base_mood + np.random.normal(0, 1)
+        mood_rating = max(1, min(10, mood_with_noise))  # Clamp between 1-10
+        
+        # Create sleep metrics
+        sleep_metrics = {
+            'total_sleep_time': sleep_time,
+            'wake_time': wake_time,
+            'rem_time': rem_time,
+            'light_sleep_time': light_time,
+            'deep_sleep_time': deep_time,
+            'sleep_efficiency': (sleep_time * 60 - wake_time) / (sleep_time * 60),
+            'rem_percentage': rem_time / sleep_time,
+            'rem_cycles': rem_cycles,
+            'rem_awakenings': rem_awakenings
         }
         
-        # Add record to user data
+        # Additional factors
+        additional_factors = {
+            'stress_level': np.random.normal(4, 2),
+            'exercise_minutes': np.random.normal(30, 15),
+            'caffeine_mg': np.random.normal(150, 50)
+        }
+        
+        # Add the record
         predictor.add_sleep_mood_record(
-            sleep_metrics, 
-            mood_rating, 
-            additional_factors['stress_level'],
-            additional_factors['exercise_minutes'],
-            additional_factors['caffeine_mg']
+            sleep_metrics, mood_rating,
+            stress_level=additional_factors['stress_level'],
+            exercise_minutes=additional_factors['exercise_minutes'],
+            caffeine_mg=additional_factors['caffeine_mg']
         )
+        
+        # After 10 days, let's see the predictions
+        if i == 9:
+            logger.info("\n=== After 10 days of data ===")
+            
+            # Test with different sleep durations
+            for test_sleep in [5.0, 6.0, 7.0, 8.0]:
+                # Create test sleep metrics
+                test_metrics = {
+                    'total_sleep_time': test_sleep,
+                    'wake_time': 20,
+                    'rem_time': test_sleep * 0.25,
+                    'light_sleep_time': test_sleep * 0.55,
+                    'deep_sleep_time': test_sleep * 0.20,
+                    'sleep_efficiency': (test_sleep * 60 - 20) / (test_sleep * 60),
+                    'rem_percentage': 0.25,
+                    'rem_cycles': 4,
+                    'rem_awakenings': 2
+                }
+                
+                # Make prediction
+                prediction, confidence = predictor.predict_mood(test_metrics, additional_factors)
+                expected_mood = 10 - test_sleep  # The unusual pattern for this user
+                
+                logger.info(f"Sleep: {test_sleep}h → Prediction: {'Good' if prediction else 'Bad'} " +
+                          f"(conf: {confidence:.4f}, expected mood: {expected_mood:.1f})")
     
-    # Update calibration model
-    predictor.update_calibration_model()
+    logger.info("\n=== After 20 days of data ===")
     
-    # Now test with new sleep data
-    new_sleep_metrics = {
-        'total_sleep_time': 450,  # 7.5 hours
-        'wake_time': 15,
-        'rem_time': 110,
-        'light_sleep_time': 245,
-        'deep_sleep_time': 95,
-        'sleep_efficiency': 95,
-        'rem_percentage': 24,
-        'rem_cycles': 4,
-        'rem_awakenings': 1
-    }
-    
-    new_additional_factors = {
-        'stress_level': 3,
-        'exercise_minutes': 45,
-        'caffeine_mg': 150
-    }
-    
-    # Get prediction with personalization
-    result = predictor.predict_mood(new_sleep_metrics, new_additional_factors)
-    
-    if result:
-        if result.get('has_personalization', False):
-            logger.info("\nPersonalized Prediction:")
-            logger.info(f"  Base Model: {'Good' if result['base_prediction']['good_mood'] else 'Bad'} mood, Score: {result['base_prediction']['mood_score']:.1f}/10")
-            logger.info(f"  Calibrated: {'Good' if result['calibrated_prediction']['good_mood'] else 'Bad'} mood, Score: {result['calibrated_prediction']['mood_score']:.1f}/10")
-            logger.info(f"  Confidence: {result['confidence']}")
-        else:
-            logger.info("\nBase Model Prediction:")
-            logger.info(f"  {'Good' if result['good_mood'] else 'Bad'} mood, Score: {result['mood_score']:.1f}/10")
-            logger.info(f"  Confidence: {result['confidence']}")
-    else:
-        logger.error("Failed to get prediction")
+    # Test again with different sleep durations
+    for test_sleep in [5.0, 6.0, 7.0, 8.0]:
+        # Create test sleep metrics
+        test_metrics = {
+            'total_sleep_time': test_sleep,
+            'wake_time': 20,
+            'rem_time': test_sleep * 0.25,
+            'light_sleep_time': test_sleep * 0.55,
+            'deep_sleep_time': test_sleep * 0.20,
+            'sleep_efficiency': (test_sleep * 60 - 20) / (test_sleep * 60),
+            'rem_percentage': 0.25,
+            'rem_cycles': 4,
+            'rem_awakenings': 2
+        }
+        
+        # Make prediction
+        prediction, confidence = predictor.predict_mood(test_metrics, additional_factors)
+        expected_mood = 10 - test_sleep  # The unusual pattern for this user
+        
+        logger.info(f"Sleep: {test_sleep}h → Prediction: {'Good' if prediction else 'Bad'} " +
+                   f"(conf: {confidence:.4f}, expected mood: {expected_mood:.1f})")
 
 def main():
-    """Main function to demonstrate personalized mood prediction."""
-    logger.info("Simulating personalized mood prediction")
-    simulate_personalization()
-    return 0
+    # Main function to demonstrate the PersonalizedMoodPredictor
+    logger.info("Personalized Mood Predictor Demo")
+    
+    # Create a predictor instance
+    user_id = "demo_user"
+    predictor = PersonalizedMoodPredictor(user_id)
+    
+    # Check if we have enough data already
+    if len(predictor.personal_data) < 5:
+        logger.info("Not enough personal data, simulating personalization...")
+        simulate_personalization()
+    else:
+        logger.info(f"Found {len(predictor.personal_data)} records for user {user_id}")
+        
+        # Test current model with some sleep values
+        for sleep_hours in [6.0, 7.0, 8.0, 9.0]:
+            test_metrics = {
+                'total_sleep_time': sleep_hours,
+                'wake_time': 20,
+                'rem_time': sleep_hours * 0.25,
+                'light_sleep_time': sleep_hours * 0.55,
+                'deep_sleep_time': sleep_hours * 0.20,
+                'sleep_efficiency': (sleep_hours * 60 - 20) / (sleep_hours * 60),
+                'rem_percentage': 0.25,
+                'rem_cycles': 4,
+                'rem_awakenings': 2
+            }
+            
+            # Make prediction
+            prediction, confidence = predictor.predict_mood(test_metrics)
+            
+            logger.info(f"Sleep: {sleep_hours}h → Mood prediction: {'Good' if prediction else 'Bad'} " +
+                       f"(confidence: {confidence:.4f})")
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    main() 
